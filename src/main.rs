@@ -1,28 +1,13 @@
 use std::fs::{self, File};
 use std::io::Read;
 
-fn run(arg: &String) {
-    let canonicalize = fs::canonicalize(arg);
-    let mut code = String::new();
+use lang::lex::*;
 
-    match canonicalize {
-        Ok(filename) => match File::open(&filename) {
-            Ok(mut file) => match file.read_to_string(&mut code) {
-                Ok(_) => {},
-                Err(e) => {
-                    println!("Unable to open file {e:?}");
-                    return;
-                }
-            },
-            Err(_) => {}
-        },
-        Err(_) => {
-            println!("File: \"{arg}\" not found!");
-            return;
-        }
-    }
+fn run(src: &String) {
+    let mut lexer: Lexer = Lexer::new(src);
 
-    println!("{code:?}");
+    lexer.lex();
+    println!("{:?}", lexer.tokens);
 }
 
 fn main() {
@@ -32,6 +17,17 @@ fn main() {
         // TODO: CLI repl
     } else {
         args.remove(0);
-        run(&args[0]);
+        let filename = fs::canonicalize(&args[0]).expect(&format!("File: {} not found!", &args[0]));
+        let mut src = String::new();
+
+        match File::open(&filename) {
+            Ok(mut file) => match file.read_to_string(&mut src) {
+                    Ok(_) => (),
+                    Err(e) => panic!("Reading from file {} failed: [{}]", &args[0], e),
+                },
+            Err(e) => panic!("Could not open file {} failed: [{}]", &args[0], e),
+        };
+
+        run(&src);
     }
 }
