@@ -6,6 +6,7 @@ pub enum Token {
     If,
     Else,
     Assign,
+
 }
 
 pub struct Lexer<'a> {
@@ -44,23 +45,39 @@ impl<'a> Lexer<'a> {
                     self.tokens.push(Token::StringLit(acc));
                 },
                 ' ' | '\n' => {},
-                _ => {
-                    let mut acc: String = String::from(&format!("{ch}"));
+                ch => {
+                    let mut acc: String = ch.to_string();
 
-                    while self.peek() != Some(&' ') {
-                        match self.next() {
-                            Some(c) => acc.push(c),
-                            None => panic!("Hit eof"),
+                    if ch.is_alphabetic() {
+                        while self.peek() != Some(&' ') {
+                            match self.next() {
+                                Some(c) => acc.push(c),
+                                None => panic!("Hit eof"),
+                            }
                         }
-                    }
 
-                    match acc.as_str() {
-                        "if" => self.tokens.push(Token::If),
-                        "else" => self.tokens.push(Token::Else),
-                        _ => (),
-                    }
+                        match acc.as_str() {
+                            "if" => self.tokens.push(Token::If),
+                            "else" => self.tokens.push(Token::Else),
+                            _ => self.tokens.push(Token::Something(acc))
+                        }
 
-                    self.next();
+                        self.next();
+                    } else {
+                        while self.peek() != Some(&' ') {
+                            match self.next() {
+                                Some(c) => acc.push(c),
+                                None => panic!("Hit eof"),
+                            }
+                        }
+
+                        match acc.as_str() {
+                            "=" => self.tokens.push(Token::Assign),
+                            _ => self.tokens.push(Token::Something(acc)),
+                        }
+
+                        self.next();
+                    }
                 }
             }
         }
