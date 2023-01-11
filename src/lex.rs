@@ -1,7 +1,10 @@
 #[derive(Debug,Clone)]
 pub enum Token {
     StringLit(String),
-    Var(String),
+    Something(String),
+    Invalid(String),
+    If,
+    Else,
     Assign,
 }
 
@@ -40,7 +43,25 @@ impl<'a> Lexer<'a> {
                     self.next();
                     self.tokens.push(Token::StringLit(acc));
                 },
-                _ => {}
+                ' ' | '\n' => {},
+                _ => {
+                    let mut acc: String = String::from(&format!("{ch}"));
+
+                    while self.peek() != Some(&' ') {
+                        match self.next() {
+                            Some(c) => acc.push(c),
+                            None => panic!("Hit eof"),
+                        }
+                    }
+
+                    match acc.as_str() {
+                        "if" => self.tokens.push(Token::If),
+                        "else" => self.tokens.push(Token::Else),
+                        _ => (),
+                    }
+
+                    self.next();
+                }
             }
         }
     }
