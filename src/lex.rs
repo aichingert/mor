@@ -1,8 +1,7 @@
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Token {
     StringLit(String),
-    Something(String),
-    Invalid(String),
+    Indent(String),
     If,
     Else,
     Assign,
@@ -59,7 +58,7 @@ impl<'a> Lexer<'a> {
                         match acc.as_str() {
                             "if" => self.tokens.push(Token::If),
                             "else" => self.tokens.push(Token::Else),
-                            _ => self.tokens.push(Token::Something(acc))
+                            _ => self.tokens.push(Token::Indent(acc))
                         }
 
                         self.next();
@@ -73,7 +72,7 @@ impl<'a> Lexer<'a> {
 
                         match acc.as_str() {
                             "=" => self.tokens.push(Token::Assign),
-                            _ => self.tokens.push(Token::Something(acc)),
+                            _ => self.tokens.push(Token::Indent(acc)),
                         }
 
                         self.next();

@@ -2,12 +2,16 @@ use std::fs::{self, File};
 use std::io::Read;
 
 use lang::lex::*;
+use lang::eval::*;
 
 fn run(src: &String) {
     let mut lexer: Lexer = Lexer::new(src);
 
     lexer.lex();
-    println!("{:?}", lexer.tokens);
+
+	let mut runtime: Runtime = Runtime::new(lexer.tokens.clone());
+
+	runtime.run();
 }
 
 fn main() {
