@@ -5,7 +5,8 @@ pub enum Token {
     If,
     Else,
     Assign,
-
+	LParen,
+	RParen,
 }
 
 pub struct Lexer<'a> {
@@ -44,6 +45,8 @@ impl<'a> Lexer<'a> {
                     self.tokens.push(Token::StringLit(acc));
                 },
                 ' ' | '\n' => {},
+				'(' => self.tokens.push(Token::LParen),
+				')' => self.tokens.push(Token::RParen),
                 ch => {
                     let mut acc: String = ch.to_string();
 

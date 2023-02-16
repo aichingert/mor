@@ -1,2 +1,2 @@
 pub mod lex;
-pub mod eval;
+pub mod core;
