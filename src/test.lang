@@ -1,3 +1,0 @@
-hallo = "hallo"
-welt = "welt"
-say (welt = "was")

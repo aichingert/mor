@@ -1,0 +1,7 @@
+let my_var : 13;
+let my_var : 13;
+let my_var : 13;
+let my_var : 13;
+let my_var : 13;
+let my_var : 13;
+let my_var : 13;
