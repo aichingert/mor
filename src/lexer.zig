@@ -2,6 +2,8 @@ const std = @import("std");
 const list = @import("utils/structures/list.zig");
 const print = std.debug.print;
 
+const TokenList = list.List(Token);
+
 pub const TokenType = enum { Let, Assign, Semicolon, Ident };
 
 pub const Token = union(TokenType) {
@@ -25,44 +27,37 @@ pub const Lexer = struct {
     index: u16,
 
     pub fn lex(self: *Lexer) void {
-        const L = list.List(Token);
-        var tokens = L{};
-
+        var tokens: TokenList = TokenList{};
         while (self.index < self.token_stream.len) {
             const idx = self.index;
 
             switch (self.token_stream[idx]) {
                 '\n', ' ' => {},
-                ':' => {
-                    const node = std.heap.page_allocator.create(L.Node) catch {
-                        return;
-                    };
-                    node.* = L.Node{
-                        .data = Token.Assign,
-                    };
-                    tokens.pushBack(node);
+                ';' => Lexer.append_token(&tokens, Token.Semicolon) catch {
+                    return;
                 },
-                ';' => {
-                    const node = std.heap.page_allocator.create(L.Node) catch {
-                        return;
-                    };
-                    node.* = L.Node{
-                        .data = Token.Semicolon,
-                    };
-                    tokens.pushBack(node);
+                else => {
+                    var buf: [512]u8 = .{};
+                    var src: usize = 0;
+
+                    while (self.token_stream[src] != '\n' and self.token_stream[src] != ' ') {
+                        buf[src] = self.token_stream[src];
+                        src += 1;
+                    }
+
+                    print("{s} \n", .{buf[0..10]});
                 },
-                else => {},
             }
 
             self.index += 1;
         }
+    }
 
-        var it: ?*L.Node = tokens.head;
-
-        print("{d}\n", .{tokens.len});
-
-        while (it) |node| : (it = node.next) {
-            show(node.data);
-        }
+    fn append_token(token_list: *TokenList, token: Token) !void {
+        const node = try std.heap.page_allocator.create(TokenList.Node);
+        node.* = TokenList.Node{
+            .data = token,
+        };
+        token_list.pushBack(node);
     }
 };
