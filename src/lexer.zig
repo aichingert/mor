@@ -1,63 +1,97 @@
 const std = @import("std");
-const list = @import("utils/structures/list.zig");
 const print = std.debug.print;
 
-const TokenList = list.List(Token);
+pub const Token = union(enum) {
+    ident: []const u8,
+    assign,
+    semicolon,
 
-pub const TokenType = enum { Let, Assign, Semicolon, Ident };
-
-pub const Token = union(TokenType) {
-    Let: void,
-    Assign: void,
-    Semicolon: void,
-    Ident: []const u8,
+    eof,
+    invalid,
 };
 
 pub fn show(token: Token) void {
     switch (token) {
-        .Assign => print("=", .{}),
-        .Semicolon => print(";", .{}),
-        .Let => print("let", .{}),
-        .Ident => |ident| print("{s}", .{ident}),
+        .assign => print("\n=\n", .{}),
+        .semicolon => print("\n;\n", .{}),
+        .eof => print("\neof\n", .{}),
+        .invalid => print("inv", .{}),
+        .ident => |ident| print("ident[ {s} ]", .{ident}),
     }
 }
 
 pub const Lexer = struct {
-    token_stream: []u8,
-    index: u16,
+    const Self = @This();
 
-    pub fn lex(self: *Lexer) void {
-        var tokens: TokenList = TokenList{};
-        while (self.index < self.token_stream.len) {
-            const idx = self.index;
+    position: usize = 0,
+    pointer: usize = 0,
+    cur: u8 = 0,
+    input: []const u8,
 
-            switch (self.token_stream[idx]) {
-                '\n', ' ' => {},
-                ';' => Lexer.append_token(&tokens, Token.Semicolon) catch {
-                    return;
-                },
-                else => {
-                    var buf: [512]u8 = .{};
-                    var src: usize = 0;
+    pub fn init(input: []const u8) Self {
+        var lex = Self{
+            .input = input,
+        };
 
-                    while (self.token_stream[src] != '\n' and self.token_stream[src] != ' ') {
-                        buf[src] = self.token_stream[src];
-                        src += 1;
-                    }
+        lex.read_char();
 
-                    print("{s} \n", .{buf[0..10]});
-                },
-            }
+        return lex;
+    }
 
-            self.index += 1;
+    pub fn next_token(self: *Self) Token {
+        self.skip_whitespace();
+        print("{c}\n", .{self.cur});
+        var token: Token = switch (self.cur) {
+            ':' => blk: {
+                self.read_char();
+                if (self.peak_char() == '=') {
+                    break :blk .assign;
+                } else {
+                    break :blk .invalid;
+                }
+            },
+            'a'...'z', 'A'...'Z', '_' => {
+                const ident = self.read_identifier();
+                return .{ .ident = ident };
+            },
+            else => return Token.eof,
+        };
+
+        return token;
+    }
+
+    fn read_char(self: *Self) void {
+        if (self.pointer >= self.input.len) {
+            self.cur = 0;
+        } else {
+            self.cur = self.input[self.pointer];
+        }
+
+        self.position = self.pointer;
+        self.pointer += 1;
+    }
+
+    fn peak_char(self: *Self) u8 {
+        if (self.pointer >= self.input.len) {
+            return 0;
+        } else {
+            return self.input[self.pointer];
         }
     }
 
-    fn append_token(token_list: *TokenList, token: Token) !void {
-        const node = try std.heap.page_allocator.create(TokenList.Node);
-        node.* = TokenList.Node{
-            .data = token,
-        };
-        token_list.pushBack(node);
+    fn read_identifier(self: *Self) []const u8 {
+        const start: usize = self.position;
+
+        while (std.ascii.isAlphabetic(self.cur) or self.cur == '_') {
+            self.read_char();
+        }
+
+        return self.input[start..self.position];
+    }
+
+    fn skip_whitespace(self: *Self) void {
+        while (std.ascii.isWhitespace(self.cur)) {
+            self.read_char();
+        }
     }
 };
