@@ -1,5 +1,6 @@
 const std = @import("std");
 const lexer = @import("ast/lexer.zig");
+const parser = @import("ast/parser.zig");
 
 pub fn get_input() ![]u8 {
     const stdin = std.io.getStdIn().reader();
@@ -19,14 +20,11 @@ pub fn get_input() ![]u8 {
 pub fn main() !void {
     const data = try get_input();
 
-    var m_lexer = lexer.Lexer.init(data);
+    var m_parser = parser.Parser.new(data);
+    var i: usize = 0;
 
-    var token: lexer.Token = m_lexer.next_token();
-
-    while (token != lexer.Token.eof) {
-        //lexer.show(token);
-        std.debug.print("{}\n", .{token});
-        token = m_lexer.next_token();
+    while (i < 3) {
+        std.debug.print("{}\n", .{m_parser.get(i)});
+        i += 1;
     }
-    std.debug.print("{}\n", .{token});
 }

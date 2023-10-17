@@ -23,12 +23,12 @@ pub const Lexer = struct {
     input: []const u8,
 
     pub fn init(input: []const u8) Self {
+        print("{s}\n", .{input});
         var lex = Self{
             .input = input,
         };
 
         lex.read_char();
-
         return lex;
     }
 
@@ -37,6 +37,7 @@ pub const Lexer = struct {
             self.read_char();
         }
 
+        print("WHY {} \n", .{self.cur});
         var token: Token = switch (self.cur) {
             '+' => Token.plus,
             '-' => Token.minus,
@@ -44,7 +45,7 @@ pub const Lexer = struct {
             '*' => Token.star,
             '0'...'9' => {
                 const number = std.fmt.parseInt(i64, self.read_number(), 10) catch |err| {
-                    print("{}\n", .{err});
+                    print("ERR: {}\n", .{err});
                     return Token.invalid;
                 };
                 return .{ .number = number };
@@ -52,6 +53,7 @@ pub const Lexer = struct {
             else => return Token.eof,
         };
 
+        print("{} \n", .{token});
         self.read_char();
         return token;
     }
