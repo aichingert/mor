@@ -3,22 +3,16 @@ const print = std.debug.print;
 
 pub const Token = union(enum) {
     ident: []const u8,
-    assign,
-    semicolon,
+    number: i64,
+
+    plus,
+    minus,
+    slash,
+    star,
 
     eof,
     invalid,
 };
-
-pub fn show(token: Token) void {
-    switch (token) {
-        .assign => print("\n=\n", .{}),
-        .semicolon => print("\n;\n", .{}),
-        .eof => print("\neof\n", .{}),
-        .invalid => print("inv", .{}),
-        .ident => |ident| print("ident[ {s} ]", .{ident}),
-    }
-}
 
 pub const Lexer = struct {
     const Self = @This();
@@ -39,24 +33,26 @@ pub const Lexer = struct {
     }
 
     pub fn next_token(self: *Self) Token {
-        self.skip_whitespace();
-        print("{c}\n", .{self.cur});
+        while (self.cur == ' ') {
+            self.read_char();
+        }
+
         var token: Token = switch (self.cur) {
-            ':' => blk: {
-                self.read_char();
-                if (self.peak_char() == '=') {
-                    break :blk .assign;
-                } else {
-                    break :blk .invalid;
-                }
-            },
-            'a'...'z', 'A'...'Z', '_' => {
-                const ident = self.read_identifier();
-                return .{ .ident = ident };
+            '+' => Token.plus,
+            '-' => Token.minus,
+            '/' => Token.slash,
+            '*' => Token.star,
+            '0'...'9' => {
+                const number = std.fmt.parseInt(i64, self.read_number(), 10) catch |err| {
+                    print("{}\n", .{err});
+                    return Token.invalid;
+                };
+                return .{ .number = number };
             },
             else => return Token.eof,
         };
 
+        self.read_char();
         return token;
     }
 
@@ -79,19 +75,13 @@ pub const Lexer = struct {
         }
     }
 
-    fn read_identifier(self: *Self) []const u8 {
+    fn read_number(self: *Self) []const u8 {
         const start: usize = self.position;
 
-        while (std.ascii.isAlphabetic(self.cur) or self.cur == '_') {
+        while (std.ascii.isAlphanumeric(self.cur)) {
             self.read_char();
         }
 
         return self.input[start..self.position];
-    }
-
-    fn skip_whitespace(self: *Self) void {
-        while (std.ascii.isWhitespace(self.cur)) {
-            self.read_char();
-        }
     }
 };
