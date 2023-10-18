@@ -5,13 +5,39 @@
 #ifndef LANG_TOKEN_H
 #define LANG_TOKEN_H
 
-template<typename T>
+#include <cstdint>
+
+enum class Type {
+    NUMBER,
+    PLUS,
+    MINUS,
+    STAR,
+    SLASH,
+    INVALID,
+    END, // since EOF is not usable
+};
+
+union Value {
+    int64_t number;
+    void* eof;
+};
+
 class Token {
 public:
-    int getType();
-    
+    Token(Type type, Value value)
+        : m_type(type)
+        , m_value(value)
+    {
+    }
+
+    virtual Type get_type();
+    virtual Value get_value();
+
+    ~Token() = default;
+
 private:
-    T type;
+    Type m_type;
+    Value m_value;
 };
 
 #endif //LANG_TOKEN_H
