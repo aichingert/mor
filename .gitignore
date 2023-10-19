@@ -1,4 +1,2 @@
-build/
-.idea/
-cmake-build-debug/
-
+target/
+Cargo.lock
