@@ -10,27 +10,29 @@
 #include <string>
 #include "token.h"
 
+bool is_number();
+
 class Lexer {
 public:
-    explicit Lexer(std::string source)
-        : m_source(std::move(source))
-        , m_current_token(new Token(Type::END,  {.eof = nullptr}))
+    explicit Lexer(std::string_view source)
+        : m_source(source)
+        , m_token(Token(Type::END,  {.none = nullptr}))
         , m_position(0)
-        , m_tokens({})
     {
     }
 
     ~Lexer() = default;
 
-    virtual Token* next_token();
+    Token &next_token();
 
 private:
-    virtual char peek(size_t offset);
-    virtual void consume();
+    char peek(size_t offset);
+    void consume();
+    void consume_number();
+    void skip_whitespace();
 
-    std::vector<Token> m_tokens;
-    Token* m_current_token;
-    std::string m_source;
+    Token m_token;
+    std::string_view m_source;
     size_t m_position;
 };
 

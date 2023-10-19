@@ -9,17 +9,20 @@
 
 enum class Type {
     NUMBER,
+
     PLUS,
     MINUS,
     STAR,
     SLASH,
+
     INVALID,
     END, // since EOF is not usable
 };
 
 union Value {
     int64_t number;
-    void* eof;
+
+    void* none;
 };
 
 class Token {
@@ -30,8 +33,8 @@ public:
     {
     }
 
-    virtual Type get_type();
-    virtual Value get_value();
+    Type get_type();
+    Value get_value();
 
     ~Token() = default;
 

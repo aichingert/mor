@@ -1,11 +1,17 @@
 #include <iostream>
-#include "ast/lexer.h"
+#include "ast/token.h"
+#include "ast/Parser.h"
 
 int main() {
-    auto lexer = new Lexer("10 + 13");
+    std::cout << "> ";
 
-    auto current_token = lexer->next_token();
+    std::string buffer;
+    std::getline(std::cin, buffer);
 
-	std::cout << "Lol" << "\n";
+    Parser parser(buffer);
+
+
+
+    std::cout << '\n';
 	return 0;
 }
