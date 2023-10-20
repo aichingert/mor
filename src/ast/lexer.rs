@@ -1,5 +1,6 @@
 use crate::ast::token::Token;
 
+const BASE: i64 = 10;
 
 pub struct Lexer {
     source: Vec<char>,
@@ -41,19 +42,17 @@ impl Lexer {
     }
 
     fn consume_number(&mut self) -> Token {
-        let mut base: i64 = 1;
         let mut lit:  i64 = 0;
 
         while self.loc < self.source.len() && self.source[self.loc].is_numeric() {
             let cur = (self.source[self.loc] as u8 - b'0') as i64;
 
             lit = if cur == 0 {
-                lit * 10
+                lit * BASE
             } else {
-                lit + cur * base
+                lit * BASE + cur
             };
 
-            base *= 10;
             self.loc += 1;
         }
 
