@@ -6,7 +6,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(source: String) -> Self {
+    pub fn new(source: &String) -> Self {
         let mut lexer = Lexer::new(source.chars().collect::<Vec<_>>());
         let mut token = lexer.next_token();
         let mut tokens = vec![token];

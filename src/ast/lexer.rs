@@ -44,8 +44,15 @@ impl Lexer {
         let mut base: i64 = 1;
         let mut lit:  i64 = 0;
 
-        while self.loc < self.source.len() && self.source[self.loc].is_alphanumeric() {
-            lit += (self.source[self.loc] as u8 - b'0') as i64 * base;
+        while self.loc < self.source.len() && self.source[self.loc].is_numeric() {
+            let cur = (self.source[self.loc] as u8 - b'0') as i64;
+
+            lit = if cur == 0 {
+                lit * 10
+            } else {
+                lit + cur * base
+            };
+
             base *= 10;
             self.loc += 1;
         }
