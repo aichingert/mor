@@ -46,6 +46,7 @@ impl Parser {
 
     fn parse_expression(&mut self, parent: u8) -> Expr {
         let mut look_ahead= self.peek(0).get_unary_precedence();
+        println!("{:?} -> {look_ahead}", self);
 
         let mut lhs = if look_ahead != 0 && look_ahead > parent {
             let op = self.next_token();
@@ -57,11 +58,22 @@ impl Parser {
 
         look_ahead = self.peek(0).get_precedence();
 
+        println!("{:?}", lhs);
+
         while look_ahead >= parent {
             let op = self.next_token();
-            let mut rhs = self.parse_primary_expression();
-            look_ahead = self.peek(0).get_precedence();
 
+            look_ahead = self.peek(0).get_unary_precedence();
+
+            let mut rhs = if look_ahead != 0 && look_ahead > op.get_precedence() {
+                let op = self.next_token();
+                let expr = self.parse_expression(look_ahead);
+                Expr::UnaryExpr(op, Box::new(expr))
+            } else {
+                self.parse_primary_expression()
+            };
+
+            look_ahead = self.peek(0).get_precedence();
             let cur_precedence = op.get_precedence();
 
             while look_ahead > cur_precedence {
