@@ -1,4 +1,4 @@
-use crate::ast::{Lexer, Token, BinaryExpr};
+use crate::ast::{Lexer, Token, Expr};
 
 #[derive(Debug)]
 pub struct Parser {
@@ -40,15 +40,24 @@ impl Parser {
         self.tokens[self.loc + offset]
     }
 
-    pub fn parse(&mut self) -> BinaryExpr { 
-        let lhs = self.parse_primary_expression();
-        self.parse_expression(lhs, 1)
+    pub fn parse(&mut self) -> Expr { 
+        self.parse_expression(1)
     }
 
-    fn parse_expression(&mut self, mut lhs: BinaryExpr, min_precedence: u8) -> BinaryExpr {
-        let mut look_ahead= self.peek(0).get_precedence();
+    fn parse_expression(&mut self, parent: u8) -> Expr {
+        let mut look_ahead= self.peek(0).get_unary_precedence();
 
-        while look_ahead >= min_precedence {
+        let mut lhs = if look_ahead != 0 && look_ahead > parent {
+            let op = self.next_token();
+            let expr = self.parse_expression(look_ahead);
+            Expr::UnaryExpr(op, Box::new(expr))
+        } else {
+            self.parse_primary_expression()
+        };
+
+        look_ahead = self.peek(0).get_precedence();
+
+        while look_ahead >= parent {
             let op = self.next_token();
             let mut rhs = self.parse_primary_expression();
             look_ahead = self.peek(0).get_precedence();
@@ -56,21 +65,21 @@ impl Parser {
             let cur_precedence = op.get_precedence();
 
             while look_ahead > cur_precedence {
-                rhs = self.parse_expression(rhs, cur_precedence + 1);
+                rhs = Expr::BinaryExpr(Box::new(rhs), op, Box::new(self.parse_expression(cur_precedence + 1)));
                 look_ahead = self.peek(0).get_precedence();
             }
 
-            lhs = BinaryExpr::Expr(Box::new(lhs), op, Box::new(rhs));
+            lhs = Expr::BinaryExpr(Box::new(lhs), op, Box::new(rhs));
         }
 
         lhs
     }
 
-    fn parse_primary_expression(&mut self) -> BinaryExpr {
-        BinaryExpr::Lit(match self.next_token() {
-            Token::Number(n) => n,
+    fn parse_primary_expression(&mut self) -> Expr {
+        match self.next_token() {
+            Token::Number(n) => Expr::NumberExpr(n),
             token => panic!("failed to parse expression! {:?}", token),
-        })
+        }
     }
 }
 

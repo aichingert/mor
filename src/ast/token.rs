@@ -12,6 +12,13 @@ pub enum Token {
 }
 
 impl Token {
+    pub fn get_unary_precedence(&self) -> u8 {
+        match self {
+            Token::Minus => 3,
+            _ => 0,
+        }
+    }
+
     pub fn get_precedence(&self) -> u8 {
         match self {
             Token::Plus  => 1,
