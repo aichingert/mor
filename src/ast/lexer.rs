@@ -27,6 +27,8 @@ impl Lexer {
             '-' => Token::Minus,
             '*' => Token::Star,
             '/' => Token::Slash,
+            '(' => Token::LParen,
+            ')' => Token::RParen,
             '0'..='9' => self.consume_number(),
             _ => Token::Invalid,
         };
@@ -42,10 +44,10 @@ impl Lexer {
     }
 
     fn consume_number(&mut self) -> Token {
-        let mut lit:  i64 = 0;
+        let mut lit:  i64 = (self.source[self.loc] as u8 - b'0') as i64;
 
-        while self.loc < self.source.len() && self.source[self.loc].is_numeric() {
-            let cur = (self.source[self.loc] as u8 - b'0') as i64;
+        while self.loc + 1 < self.source.len() && self.source[self.loc + 1].is_numeric() {
+            let cur = (self.source[self.loc + 1] as u8 - b'0') as i64;
 
             lit = if cur == 0 {
                 lit * BASE

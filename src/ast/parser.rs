@@ -17,6 +17,8 @@ impl Parser {
             tokens.push(token);
         }
 
+        println!("{:?}", tokens);
+
         Self {
             tokens,
             loc: 0,
@@ -46,8 +48,8 @@ impl Parser {
 
     fn parse_expression(&mut self, parent: u8) -> Expr {
         let mut look_ahead= self.peek(0).get_unary_precedence();
-        println!("{:?} -> {look_ahead}", self);
 
+        println!("{:?}", self);
         let mut lhs = if look_ahead != 0 && look_ahead > parent {
             let op = self.next_token();
             let expr = self.parse_expression(look_ahead);
@@ -57,8 +59,6 @@ impl Parser {
         };
 
         look_ahead = self.peek(0).get_precedence();
-
-        println!("{:?}", lhs);
 
         while look_ahead >= parent {
             let op = self.next_token();
@@ -77,19 +77,27 @@ impl Parser {
             let cur_precedence = op.get_precedence();
 
             while look_ahead > cur_precedence {
+                println!("{:?}", rhs);
                 rhs = Expr::BinaryExpr(Box::new(rhs), op, Box::new(self.parse_expression(cur_precedence + 1)));
                 look_ahead = self.peek(0).get_precedence();
             }
 
             lhs = Expr::BinaryExpr(Box::new(lhs), op, Box::new(rhs));
+            println!("{:?}", lhs);
         }
 
+        println!("{:?}", lhs);
         lhs
     }
 
     fn parse_primary_expression(&mut self) -> Expr {
         match self.next_token() {
             Token::Number(n) => Expr::NumberExpr(n),
+            Token::LParen    => {
+                let expr = Expr::ParenExpr(Box::new(self.parse_expression(1)));
+                _ = self.next_token();
+                expr
+            }
             token => panic!("failed to parse expression! {:?}", token),
         }
     }
