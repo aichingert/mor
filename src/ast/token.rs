@@ -6,6 +6,11 @@ pub enum Token {
     Minus,
     Star,
     Slash,
+    Power,
+
+    XOR,
+    BitOr,
+    BitAnd,
 
     LParen,
     RParen,
@@ -28,6 +33,10 @@ impl Token {
             Token::Minus => 1,
             Token::Star  => 2,
             Token::Slash => 2,
+            Token::Power => 2,
+            Token::XOR   => 2,
+            Token::BitOr => 2,
+            Token::BitAnd=> 2,
             Token::RParen => 0,
             Token::Eof => 0,
             _ => panic!("=> {:?} is not an operator!", self),

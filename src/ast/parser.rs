@@ -17,8 +17,6 @@ impl Parser {
             tokens.push(token);
         }
 
-        println!("{:?}", tokens);
-
         Self {
             tokens,
             loc: 0,
@@ -67,10 +65,10 @@ impl Parser {
             let mut rhs = self.parse_unary_expression(look_ahead);
 
             look_ahead = self.peek(0).get_precedence();
-            let cur_precedence = op.get_precedence();
 
-            while look_ahead > cur_precedence {
-                rhs = Expr::BinaryExpr(Box::new(rhs), op, Box::new(self.parse_expression(cur_precedence + 1)));
+            while look_ahead > op.get_precedence() {
+                let op = self.next_token();
+                rhs = Expr::BinaryExpr(Box::new(rhs), op, Box::new(self.parse_expression(op.get_precedence() + 1)));
                 look_ahead = self.peek(0).get_precedence();
             }
 

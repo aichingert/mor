@@ -26,15 +26,33 @@ impl Lexer {
             '+' => Token::Plus,
             '-' => Token::Minus,
             '*' => Token::Star,
+            '^' => if self.peek(1) == '^' {
+                self.loc += 1; 
+                Token::Power
+            } else {
+                Token::XOR
+            }
+            '&' => Token::BitAnd,
+            '|' => Token::BitOr,
             '/' => Token::Slash,
             '(' => Token::LParen,
             ')' => Token::RParen,
             '0'..='9' => self.consume_number(),
             _ => Token::Invalid,
         };
+
         self.loc += 1;
 
         token
+    }
+
+    fn peek(&self, offset: usize) -> char {
+        if offset + self.loc > self.source.len() {
+            println!("hhshh");
+            return ' ';
+        }
+
+        self.source[self.loc + offset]
     }
 
     fn skip_whitespace(&mut self) {

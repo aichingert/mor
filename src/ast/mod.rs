@@ -30,9 +30,24 @@ impl Expr {
                     Token::Plus  => l.evaluate() + r.evaluate(),
                     Token::Star  => l.evaluate() * r.evaluate(),
                     Token::Slash => l.evaluate() / r.evaluate(),
+                    Token::Power => l.power(r.evaluate()),
+                    Token::XOR   => l.evaluate() ^ r.evaluate(),
+                    Token::BitAnd=> l.evaluate() & r.evaluate(),
+                    Token::BitOr => l.evaluate() | r.evaluate(),
                     _ => panic!("invalid token!? {:?}", op),
                 }
             }
         }
+    }
+
+    fn power(&self, exp: i64) -> i64 {
+        let base = self.evaluate();
+        let mut res = 1;
+
+        for _ in 0..exp {
+            res *= base;
+        }
+
+        res
     }
 }
