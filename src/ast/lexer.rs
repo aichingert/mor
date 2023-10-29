@@ -65,7 +65,7 @@ impl Lexer {
     fn consume_ident(&mut self) -> Token {
         let mut acc = String::new();
 
-        while self.loc + 1 < self.source.len() && self.source[self.loc].is_alphanumeric() {
+        while self.loc < self.source.len() && self.source[self.loc].is_alphanumeric() {
             acc.push(self.source[self.loc]);
             self.loc += 1;
         }

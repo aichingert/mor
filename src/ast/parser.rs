@@ -62,7 +62,7 @@ impl Parser {
 
         let expr = self.parse_expression(1);
 
-        Statement::AstDecl(Token::Ident(ident), expr)
+        Statement::AstDecl(ident, expr)
     }
 
     fn parse_unary_expression(&mut self, parent: u8) -> Expr {
@@ -101,6 +101,7 @@ impl Parser {
 
     fn parse_primary_expression(&mut self) -> Expr {
         match self.next_token() {
+            Token::Ident(s) => Expr::IdentExpr(s),
             Token::Number(n) => Expr::NumberExpr(n),
             Token::LParen    => {
                 let expr = Expr::ParenExpr(Box::new(self.parse_expression(1)));

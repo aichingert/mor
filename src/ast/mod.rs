@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub mod parser;
 pub use parser::Parser;
 
@@ -7,21 +9,38 @@ pub use lexer::Lexer;
 pub mod token;
 pub use token::Token;
 
+pub struct Environment {
+    pub variables: HashMap<String, i64>,
+}
+
+impl Environment {
+    pub fn new() -> Self {
+        Self {
+            variables: HashMap::new(),
+        }
+    }
+}
+
 pub enum Statement {
-    AstDecl(Token, Expr),
+    AstDecl(String, Expr),
     AstExpr(Expr),
 }
 
 impl Statement {
-    pub fn evaluate(&self) -> i64 {
+    pub fn evaluate(self, env: &mut Environment) -> i64 {
         match self {
-            Statement::AstDecl(_t, expr) => expr.evaluate(),
-            Statement::AstExpr(expr)    => expr.evaluate(),
+            Statement::AstDecl(ident, expr) => {
+                let value = expr.evaluate(env);
+                env.variables.insert(ident, value);
+                value
+            },
+            Statement::AstExpr(expr) => expr.evaluate(env),
         }
     }
 }
 
 pub enum Expr {
+    IdentExpr(String),
     NumberExpr(i64),
     ParenExpr(Box<Expr>),
     BinaryExpr(Box<Expr>, Token, Box<Expr>),
@@ -29,32 +48,33 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn evaluate(&self) -> i64 {
+    pub fn evaluate(&self, env: &Environment) -> i64 {
         match self {
+            Expr::IdentExpr(ident) => *env.variables.get(ident).unwrap(),
             Expr::NumberExpr(n) => *n,
-            Expr::ParenExpr(ex) => ex.evaluate(),
+            Expr::ParenExpr(ex) => ex.evaluate(env),
             Expr::UnaryExpr(op, expr) => match op {
-                Token::Minus => -expr.evaluate(),
+                Token::Minus => -expr.evaluate(env),
                 _ => panic!("invalid unary operator! {:?}", op),
             }
             Expr::BinaryExpr(l, op, r) => {
                 match op {
-                    Token::Minus => l.evaluate() - r.evaluate(),
-                    Token::Plus  => l.evaluate() + r.evaluate(),
-                    Token::Star  => l.evaluate() * r.evaluate(),
-                    Token::Slash => l.evaluate() / r.evaluate(),
-                    Token::Power => l.power(r.evaluate()),
-                    Token::XOR   => l.evaluate() ^ r.evaluate(),
-                    Token::BitAnd=> l.evaluate() & r.evaluate(),
-                    Token::BitOr => l.evaluate() | r.evaluate(),
+                    Token::Minus => l.evaluate(env) - r.evaluate(env),
+                    Token::Plus  => l.evaluate(env) + r.evaluate(env),
+                    Token::Star  => l.evaluate(env) * r.evaluate(env),
+                    Token::Slash => l.evaluate(env) / r.evaluate(env),
+                    Token::Power => l.power(r.evaluate(env), env),
+                    Token::XOR   => l.evaluate(env) ^ r.evaluate(env),
+                    Token::BitAnd=> l.evaluate(env) & r.evaluate(env),
+                    Token::BitOr => l.evaluate(env) | r.evaluate(env),
                     _ => panic!("invalid token!? {:?}", op),
                 }
             }
         }
     }
 
-    fn power(&self, exp: i64) -> i64 {
-        let base = self.evaluate();
+    fn power(&self, exp: i64, env: &Environment) -> i64 {
+        let base = self.evaluate(env);
         let mut res = 1;
 
         for _ in 0..exp {
