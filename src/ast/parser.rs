@@ -1,4 +1,4 @@
-use crate::ast::{Lexer, Token, Expr};
+use crate::ast::{Lexer, Token, Statement, Expr};
 
 #[derive(Debug)]
 pub struct Parser {
@@ -9,13 +9,12 @@ pub struct Parser {
 impl Parser {
     pub fn new(source: &String) -> Self {
         let mut lexer = Lexer::new(source.chars().collect::<Vec<_>>());
-        let mut token = lexer.next_token();
-        let mut tokens = vec![token];
+        let mut tokens = Vec::new();
 
-        while token != Token::Eof {
-            token = lexer.next_token();
+        while let Some(token) = lexer.next_token() {
             tokens.push(token);
         }
+        tokens.push(Token::Eof);
 
         Self {
             tokens,
@@ -25,23 +24,45 @@ impl Parser {
 
     fn next_token(&mut self) -> Token {
         if self.loc + 1 >= self.tokens.len() {
-            return self.tokens[self.tokens.len() - 1];
+            return self.tokens[self.tokens.len() - 1].clone();
         }
 
         self.loc += 1;
-        self.tokens[self.loc - 1]
+        self.tokens[self.loc - 1].clone()
     }
 
     fn peek(&self, offset: usize) -> Token {
         if self.loc + offset >= self.tokens.len() {
-            return self.tokens[self.tokens.len() - 1];
+            return self.tokens[self.tokens.len() - 1].clone();
         }
 
-        self.tokens[self.loc + offset]
+        self.tokens[self.loc + offset].clone()
     }
 
-    pub fn parse(&mut self) -> Expr { 
-        self.parse_expression(1)
+    pub fn parse(&mut self) -> Statement { 
+        self.parse_statement()
+    }
+
+    fn parse_statement(&mut self) -> Statement {
+        match self.peek(0) {
+            Token::KwLet => self.parse_declare_statement(),
+            _ => Statement::AstExpr(self.parse_expression(1)),
+        }
+    }
+
+    fn parse_declare_statement(&mut self) -> Statement {
+        _ = self.next_token(); // KW_Let
+
+        let ident = match self.next_token() {
+            Token::Ident(s) => s,
+            _ => panic!("invalid declare statement"),
+        };
+
+        _ = self.next_token(); // assign
+
+        let expr = self.parse_expression(1);
+
+        Statement::AstDecl(Token::Ident(ident), expr)
     }
 
     fn parse_unary_expression(&mut self, parent: u8) -> Expr {
@@ -67,8 +88,8 @@ impl Parser {
             look_ahead = self.peek(0).get_precedence();
 
             while look_ahead > op.get_precedence() {
-                let op = self.next_token();
-                rhs = Expr::BinaryExpr(Box::new(rhs), op, Box::new(self.parse_expression(op.get_precedence() + 1)));
+                let binding_op = self.next_token();
+                rhs = Expr::BinaryExpr(Box::new(rhs), binding_op, Box::new(self.parse_expression(op.get_precedence() + 1)));
                 look_ahead = self.peek(0).get_precedence();
             }
 

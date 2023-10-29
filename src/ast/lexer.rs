@@ -15,35 +15,36 @@ impl Lexer {
         }
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
         if self.loc >= self.source.len() {
-            return Token::Eof;
+            return None;
         }
 
         let token = match self.source[self.loc] {
             '+' => Token::Plus,
             '-' => Token::Minus,
-            '*' => Token::Star,
-            '^' => if self.peek(1) == '^' {
+            '*' => if self.peek(1) == '*' {
                 self.loc += 1; 
                 Token::Power
             } else {
-                Token::XOR
-            }
+                Token::Star
+            },
+            '^' => Token::XOR,
             '&' => Token::BitAnd,
             '|' => Token::BitOr,
             '/' => Token::Slash,
             '(' => Token::LParen,
             ')' => Token::RParen,
+            '=' => Token::Assign,
+            'A'..='Z' | 'a'..='z' => self.consume_ident(),
             '0'..='9' => self.consume_number(),
             _ => Token::Invalid,
         };
 
         self.loc += 1;
-
-        token
+        Some(token)
     }
 
     fn peek(&self, offset: usize) -> char {
@@ -58,6 +59,20 @@ impl Lexer {
     fn skip_whitespace(&mut self) {
         while self.loc < self.source.len() && self.source[self.loc] == ' ' {
             self.loc += 1;
+        }
+    }
+
+    fn consume_ident(&mut self) -> Token {
+        let mut acc = String::new();
+
+        while self.loc + 1 < self.source.len() && self.source[self.loc].is_alphanumeric() {
+            acc.push(self.source[self.loc]);
+            self.loc += 1;
+        }
+
+        match acc.as_str() {
+            "let" => Token::KwLet,
+            _ => Token::Ident(acc),
         }
     }
 

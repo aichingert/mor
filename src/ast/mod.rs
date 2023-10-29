@@ -7,7 +7,20 @@ pub use lexer::Lexer;
 pub mod token;
 pub use token::Token;
 
-#[derive(Debug)]
+pub enum Statement {
+    AstDecl(Token, Expr),
+    AstExpr(Expr),
+}
+
+impl Statement {
+    pub fn evaluate(&self) -> i64 {
+        match self {
+            Statement::AstDecl(_t, expr) => expr.evaluate(),
+            Statement::AstExpr(expr)    => expr.evaluate(),
+        }
+    }
+}
+
 pub enum Expr {
     NumberExpr(i64),
     ParenExpr(Box<Expr>),

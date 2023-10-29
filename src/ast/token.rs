@@ -1,20 +1,31 @@
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
+    // types
+    Ident(String),
     Number(i64),
 
+    // keywords
+    KwLet,
+
+    Assign,
+
+    // ops
     Plus,
     Minus,
     Star,
     Slash,
     Power,
 
+    // binary ops
     XOR,
     BitOr,
     BitAnd,
 
+    // scoping
     LParen,
     RParen,
 
+    // Other
     Invalid,
     Eof,
 }
