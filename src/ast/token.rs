@@ -14,8 +14,7 @@ pub enum Token {
 
     Decl,
     Assign,
-
-
+    Equal,
 
     // binary ops
     XOR,
@@ -53,6 +52,7 @@ impl Token {
             Token::Slash => 2,
             Token::Power => 2,
             Token::XOR   => 2,
+            Token::Equal => 2,
             Token::And   => 2,
             Token::Or    => 2,
             Token::BitOr => 2,

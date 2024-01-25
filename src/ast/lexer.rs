@@ -30,6 +30,7 @@ impl Lexer {
                 Token::Star
             },
             '^' => Token::XOR,
+            '!' => Token::Not,
             '&' => {
                 if self.peek(1) == '&' {
                     self.loc += 1;
@@ -49,7 +50,14 @@ impl Lexer {
             '/' => Token::Slash,
             '(' => Token::LParen,
             ')' => Token::RParen,
-            '=' => Token::Assign,
+            '=' => {
+                if self.peek(1) == '=' {
+                    self.loc += 1;
+                    Token::Equal
+                } else {
+                    Token::Assign
+                }
+            }
             ':' if self.peek(1) == '=' => { self.loc += 1; Token::Decl }
             'A'..='Z' | 'a'..='z' => self.consume_ident(),
             '0'..='9' => self.consume_number(),

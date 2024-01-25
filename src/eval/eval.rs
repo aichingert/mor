@@ -56,14 +56,9 @@ impl Expr {
             Expr::NumberExpr(n)  => Obj::Num(*n),
             Expr::BooleanExpr(b) => Obj::Bool(*b),
             Expr::ParenExpr(ex) => ex.evaluate(env),
-            Expr::UnaryExpr(op, expr) => match op {
-                Token::Minus => {
-                    let Obj::Num(n) = expr.evaluate(env) else {
-                        panic!("Not able to calculate unary minus for anything except number");
-                    };
-
-                    Obj::Num(-n)
-                }
+            Expr::UnaryExpr(op, expr) => match (op, expr.evaluate(env)) {
+                (Token::Minus, Obj::Num(n)) => Obj::Num(-n),
+                (Token::Not, Obj::Bool(b))  => Obj::Bool(!b),
                 _ => panic!("invalid unary operator! {:?}", op),
             }
             Expr::BinaryExpr(l, op, r) => {
@@ -79,6 +74,8 @@ impl Expr {
                     (Obj::Num(l), Token::XOR, Obj::Num(r)) => Obj::Num(l ^ r),
                     (Obj::Num(l), Token::BitAnd, Obj::Num(r)) => Obj::Num(l & r),
                     (Obj::Num(l), Token::BitOr, Obj::Num(r)) => Obj::Num(l | r),
+                    (Obj::Num(l), Token::Equal, Obj::Num(r)) => Obj::Bool(l == r),
+                    (Obj::Bool(l), Token::Equal, Obj::Bool(r)) => Obj::Bool(l == r),
                     (Obj::Bool(l), Token::And, Obj::Bool(r)) => Obj::Bool(l && r),
                     (Obj::Bool(l), Token::Or, Obj::Bool(r)) => Obj::Bool(l || r),
                     _ => panic!("invalid arrangement {:?} op: {:?} {:?}", l, op, r),
