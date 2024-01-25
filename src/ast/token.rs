@@ -3,11 +3,7 @@ pub enum Token {
     // types
     Ident(String),
     Number(i64),
-
-    // keywords
-    KwLet,
-
-    Assign,
+    Bool(bool),
 
     // ops
     Plus,
@@ -16,10 +12,20 @@ pub enum Token {
     Slash,
     Power,
 
+    Decl,
+    Assign,
+
+
+
     // binary ops
     XOR,
     BitOr,
     BitAnd,
+
+    // logical ops
+    Or,
+    And,
+    Not,
 
     // scoping
     LParen,
@@ -34,6 +40,7 @@ impl Token {
     pub fn get_unary_precedence(&self) -> u8 {
         match self {
             Token::Minus => 3,
+            Token::Not   => 3,
             _ => 0,
         }
     }
@@ -46,6 +53,8 @@ impl Token {
             Token::Slash => 2,
             Token::Power => 2,
             Token::XOR   => 2,
+            Token::And   => 2,
+            Token::Or    => 2,
             Token::BitOr => 2,
             Token::BitAnd=> 2,
             Token::RParen => 0,

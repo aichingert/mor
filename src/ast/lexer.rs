@@ -1,7 +1,5 @@
 use crate::ast::token::Token;
 
-const BASE: i64 = 10;
-
 pub struct Lexer {
     source: Vec<char>,
     loc: usize,
@@ -32,12 +30,27 @@ impl Lexer {
                 Token::Star
             },
             '^' => Token::XOR,
-            '&' => Token::BitAnd,
-            '|' => Token::BitOr,
+            '&' => {
+                if self.peek(1) == '&' {
+                    self.loc += 1;
+                    Token::And
+                } else {
+                    Token::BitAnd
+                }
+            }
+            '|' => {
+                if self.peek(1) == '|' {
+                    self.loc += 1;
+                    Token::Or
+                } else {
+                    Token::BitOr
+                }
+            }
             '/' => Token::Slash,
             '(' => Token::LParen,
             ')' => Token::RParen,
             '=' => Token::Assign,
+            ':' if self.peek(1) == '=' => { self.loc += 1; Token::Decl }
             'A'..='Z' | 'a'..='z' => self.consume_ident(),
             '0'..='9' => self.consume_number(),
             _ => Token::Invalid,
@@ -71,26 +84,20 @@ impl Lexer {
         }
 
         match acc.as_str() {
-            "let" => Token::KwLet,
+            "true" | "false" => Token::Bool(acc.as_str() == "true"),
             _ => Token::Ident(acc),
         }
     }
 
     fn consume_number(&mut self) -> Token {
-        let mut lit:  i64 = (self.source[self.loc] as u8 - b'0') as i64;
+        let src = self.loc;
 
         while self.loc + 1 < self.source.len() && self.source[self.loc + 1].is_numeric() {
-            let cur = (self.source[self.loc + 1] as u8 - b'0') as i64;
-
-            lit = if cur == 0 {
-                lit * BASE
-            } else {
-                lit * BASE + cur
-            };
-
             self.loc += 1;
         }
 
-        Token::Number(lit)
+        let num = self.source[src..self.loc + 1].iter().collect::<String>();
+
+        Token::Number(num.parse::<i64>().unwrap())
     }
 }

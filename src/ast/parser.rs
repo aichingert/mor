@@ -1,4 +1,5 @@
-use crate::ast::{Lexer, Token, Statement, Expr};
+use crate::ast::{Lexer, Token};
+use crate::eval::{Expr, Statement};
 
 #[derive(Debug)]
 pub struct Parser {
@@ -39,30 +40,33 @@ impl Parser {
         self.tokens[self.loc + offset].clone()
     }
 
-    pub fn parse(&mut self) -> Statement { 
+    pub fn parse(&mut self) -> Statement {
         self.parse_statement()
     }
 
     fn parse_statement(&mut self) -> Statement {
         match self.peek(0) {
-            Token::KwLet => self.parse_declare_statement(),
+            Token::Ident(_) if matches!(self.peek(1), Token::Decl | Token::Assign) => {
+                self.parse_assign_or_declare_statement()
+            }
             _ => Statement::AstExpr(self.parse_expression(1)),
         }
     }
 
-    fn parse_declare_statement(&mut self) -> Statement {
-        _ = self.next_token(); // KW_Let
-
+    fn parse_assign_or_declare_statement(&mut self) -> Statement {
         let ident = match self.next_token() {
             Token::Ident(s) => s,
             _ => panic!("invalid declare statement"),
         };
 
-        _ = self.next_token(); // assign
-
+        let token = self.next_token();
         let expr = self.parse_expression(1);
 
-        Statement::AstDecl(ident, expr)
+        match token {
+            Token::Decl => Statement::AstDecl(ident, expr),
+            Token::Assign => Statement::AstAssign(ident, expr),
+            _ => unreachable!(),
+        }
     }
 
     fn parse_unary_expression(&mut self, parent: u8) -> Expr {
@@ -103,6 +107,7 @@ impl Parser {
         match self.next_token() {
             Token::Ident(s) => Expr::IdentExpr(s),
             Token::Number(n) => Expr::NumberExpr(n),
+            Token::Bool(b) => Expr::BooleanExpr(b),
             Token::LParen    => {
                 let expr = Expr::ParenExpr(Box::new(self.parse_expression(1)));
                 _ = self.next_token(); // => RParen

@@ -1,7 +1,10 @@
 use std::io::{self, Write};
 
 mod ast;
-use ast::{Environment, Parser};
+use ast::Parser;
+
+mod eval;
+use eval::Environment;
 
 fn repl() -> io::Result<()> {
     let mut env = Environment::new();
@@ -19,8 +22,10 @@ fn repl() -> io::Result<()> {
             break;
         }
 
-        let mut parser = Parser::new(&buf);
-        println!("{}", parser.parse().evaluate(&mut env));
+        let tokens = Parser::new(&buf).parse();
+        let value = tokens.evaluate(&mut env);
+
+        println!("{:?}", value);
     }
 
     Ok(())
