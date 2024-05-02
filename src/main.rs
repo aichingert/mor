@@ -1,38 +1,73 @@
-use std::io::{self, Write};
+use std::io::{self, BufRead};
+use std::iter::Peekable;
 
-mod ast;
-use ast::Parser;
+type N = f64;
 
-mod eval;
-use eval::Environment;
-
-fn repl() -> io::Result<()> {
-    let mut env = Environment::new();
-    let stdin = io::stdin();
-
-    loop {
-        print!("> ");
-        let mut buf = String::new();
-
-        io::stdout().flush()?;
-        stdin.read_line(&mut buf)?;
-        buf = buf.trim().to_string();
-
-        if buf == "q" {
-            break;
-        }
-
-        let tokens = Parser::new(&buf).parse();
-        let value = tokens.evaluate(&mut env);
-
-        println!("{:?}", value);
-    }
-
-    Ok(())
+enum Instr {
+    Add(N),
 }
 
-fn main() -> io::Result<()> {
-    repl()?;
+#[derive(Debug)]
+enum Token {
+    Num(String),
 
-    Ok(())
+    Plus,
+    Minus,
+
+    Star,
+    Slash,
+}
+
+impl Token {
+    fn parse_line(mut chars: Peekable<std::str::Chars>,) -> Vec<Token> {
+        let mut tokens = Vec::new();
+
+        while let Some(ch) = chars.next() {
+            if ch == ' ' { continue; }
+
+            tokens.push(match ch {
+                '+' => Token::Plus,
+                '-' => Token::Minus,
+                '/' => Token::Star,
+                '*' => Token::Slash,
+                _ => {
+                    println!("ERROR: invalid token {ch}");
+                    std::process::exit(1);
+                }
+            });
+        }
+
+        tokens
+    }
+}
+
+struct Program {
+    byte_code: Vec<Instr>
+}
+
+fn lex(filename: String) -> Vec<Token> {
+    let file = std::fs::File::open(filename).unwrap();
+    let mut tokens = Vec::new();
+
+    for line in io::BufReader::new(file).lines().flatten() {
+        tokens.append(&mut Token::parse_line(line.chars().peekable()));
+        println!("{tokens:?}");
+    }
+
+    tokens
+}
+
+fn parse(tokens: Vec<Token>) -> Program {
+    Program { byte_code: Vec::new() }
+}
+
+fn main() {
+    let Some(filename) = std::env::args().into_iter().nth(1) else {
+        println!("lang: \x1b[31mfatal error\x1b[0m: no input files");
+        std::process::exit(1);
+    };
+
+    let tokens = lex(filename);
+    let prog   = parse(tokens);
+
 }
