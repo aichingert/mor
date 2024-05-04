@@ -27,6 +27,18 @@ enum Token<'t> {
     Slash,
 }
 
+impl<'t> Token<'t> {
+    fn try_biop(&self) -> Option<BiOpKind> {
+        match self {
+            Token::Plus => Some(BiOpKind::Add),
+            Token::Minus => Some(BiOpKind::Sub),
+            Token::Star => Some(BiOpKind::Mul),
+            Token::Slash => Some(BiOpKind::Div),
+            _ => None,
+        }
+    }
+}
+
 impl<'t> Tokenizer<'t> {
     pub fn tokenize(source: &'t [u8]) -> Vec<Token<'t>> {
         let mut tokenizer = Self::new(source);
@@ -52,7 +64,7 @@ impl<'t> Tokenizer<'t> {
     }
 
     fn consume_ch_while<P: Fn(char) -> bool>(&mut self, pred: P) {
-        while self.peek_ch(1).is_some_and(|b| pred(b as char)) {
+        while self.peek_ch(0).is_some_and(|b| pred(b as char)) {
             self.consume_ch(1);
         }
     }
@@ -98,22 +110,26 @@ impl<'t> Tokenizer<'t> {
     }
 }
 
+#[derive(Debug)]
 enum Expr<'e> {
     Number  (&'e str),
     UnOp    (Box<UnOpEx<'e>>),
     BiOp    (Box<BiOpEx<'e>>),
 }
 
+#[derive(Debug)]
 enum UnOpKind {
     Not,
     Negate,
 }
 
+#[derive(Debug)]
 struct UnOpEx<'u> {
     kind: UnOpKind,
     child: Expr<'u>,
 }
 
+#[derive(Debug)]
 enum BiOpKind {
     Add,
     Sub,
@@ -121,6 +137,27 @@ enum BiOpKind {
     Div,
 }
 
+impl BiOpKind {
+    fn lprec(&self) -> u16 {
+        match self {
+            BiOpKind::Add => 100,
+            BiOpKind::Sub => 100,
+            BiOpKind::Mul => 200,
+            BiOpKind::Div => 200,
+        }
+    }
+    
+    fn rprec(&self) -> u16 {
+        match self {
+            BiOpKind::Add => 101,
+            BiOpKind::Sub => 101,
+            BiOpKind::Mul => 201,
+            BiOpKind::Div => 201,
+        }
+    }
+}
+
+#[derive(Debug)]
 struct BiOpEx<'b> {
     kind: BiOpKind,
     children: [Expr<'b>; 2],
@@ -140,22 +177,63 @@ impl<'p, 't> Parser<'p, 't> {
         self.tokens.get(self.cursor + off)
     }
 
-    fn parse_expr(&mut self, prec: u32) -> Option<Expr<'t>> {
+    fn next(&mut self) -> Option<&Token<'t>> {
+        self.cursor += 1;
+        self.tokens.get(self.cursor - 1)
+    }
 
-        Some(Expr::Number(""))
+    fn parse_leading_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
+        let tok = self.next()?;
+
+        if let Token::Number(n) = tok {
+            return Some(Expr::Number(n));
+        }
+
+        None
+    }
+
+    fn parse_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
+        let mut res = self.parse_leading_expr(prec)?;
+
+        loop {
+            let Some(cur) = self.peek(0) else { break; };
+
+            if let Some(biop) = cur.try_biop() {
+                if biop.lprec() >= prec {
+                    self.next()?; // operator
+
+                    let other = self.parse_expr(biop.rprec())?;
+                    res = Expr::BiOp(Box::new(BiOpEx {
+                        kind: biop,
+                        children: [res, other],
+                    }));
+                    continue;
+                }
+            }
+
+            break;
+        }
+
+        Some(res)
     } 
 }
 
-pub fn parse_single<'t>(source: &'t [u8]) -> Expr<'t> {
+pub fn parse_single<'t>(source: &'t [u8]) -> Option<Expr<'t>> {
     let tokens = Tokenizer::tokenize(source);
-    Expr::Number("")
+    let mut p = Parser::new(&tokens);
+    p.parse_expr(0)
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let Some(file) = std::env::args().into_iter().nth(1) else {
         println!("lang: \x1b[31mfatal error\x1b[0m: no input files");
         std::process::exit(1);
     };
 
+    let source = std::fs::read_to_string(file)?;
+    let res = parse_single(source.as_bytes()).unwrap();
 
+    println!("{res:?}");
+
+    Ok(())
 }
