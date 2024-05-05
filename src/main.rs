@@ -1,14 +1,10 @@
-use std::io::{self, BufRead};
-use std::iter::Peekable;
+use std::io::Write;
 
 type N = f64;
-
-
 
 enum Instr {
     Add(N),
 }
-
 
 struct Tokenizer<'t> {
     source: &'t [u8],
@@ -224,6 +220,56 @@ pub fn parse_single<'t>(source: &'t [u8]) -> Option<Expr<'t>> {
     p.parse_expr(0)
 }
 
+pub struct Compiler {
+    text: Vec<String>,
+    data: Vec<String>,
+}
+
+impl<'ex> Compiler {
+    pub fn new() -> Self {
+        let text = vec!["section    .text", "global     _start", "_start: "].into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let data = vec!["section    .bss", "    res resb 4"].into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        Self { text, data }
+    }
+
+    fn compile_expr(&mut self, expr: Expr<'ex>) {
+        println!("{expr:?}");
+        match expr {
+            Expr::BiOp(ex) => {
+                for (i, child) in ex.children.into_iter().enumerate() {
+                    if i == 2 {
+                        self.text.push("".to_string());
+                    }
+                    self.compile_expr(child);
+                }
+            }
+            Expr::UnOp(ex) => (), // TODO: implement unary ops
+            Expr::Number(num) => {
+                self.text.push(format!("    mov eax, {num}"));
+            }
+        }
+    }
+
+    pub fn compile(&mut self, expr: Expr<'ex>) {
+        self.compile_expr(expr);
+        self.text.push("    mov eax, 1".to_string());
+        self.text.push("    int 0x80".to_string());
+        self.text.push("".to_string());
+
+        let mut file = std::fs::File::create("prog.asm").unwrap();
+        file.write_all(&self.text.join("\n").bytes().collect::<Vec<_>>()).unwrap();
+        file.write_all(&self.data.join("\n").bytes().collect::<Vec<_>>()).unwrap();
+
+        std::process::Command::new("nasm")
+            .args(["-f", "elf64", "prog.asm"])
+            .output().unwrap();
+        std::process::Command::new("ld")
+            .args(["-o", "prog", "prog.o"])
+            .output().unwrap();
+    }
+}
+
 fn main() -> std::io::Result<()> {
     let Some(file) = std::env::args().into_iter().nth(1) else {
         println!("lang: \x1b[31mfatal error\x1b[0m: no input files");
@@ -231,9 +277,9 @@ fn main() -> std::io::Result<()> {
     };
 
     let source = std::fs::read_to_string(file)?;
-    let res = parse_single(source.as_bytes()).unwrap();
+    let ast = parse_single(source.as_bytes()).unwrap();
 
-    println!("{res:?}");
+    Compiler::new().compile(ast);
 
     Ok(())
 }
