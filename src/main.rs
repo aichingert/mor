@@ -223,49 +223,101 @@ pub fn parse_single<'t>(source: &'t [u8]) -> Option<Expr<'t>> {
 pub struct Compiler {
     text: Vec<String>,
     data: Vec<String>,
+    bss:  Vec<String>,
 }
 
 impl<'ex> Compiler {
     pub fn new() -> Self {
-        let text = vec!["section    .text", "global     _start", "_start: "].into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        let data = vec!["section    .bss", "    res resb 4"].into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let conv = |v: Vec<&str>| {
+            v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        };
 
-        Self { text, data }
+        let data = conv(vec!["segment    .data", "    result dd 0", ""]);
+        let bss  = conv(vec!["segment    .bss", "    buffer resb 12 ; 4", ""]);
+        let text = conv(vec!["segment    .text", "global     _start", "_start: "]);
+
+        Self { text, data, bss }
     }
 
     fn compile_expr(&mut self, expr: Expr<'ex>) {
         println!("{expr:?}");
         match expr {
             Expr::BiOp(ex) => {
-                for (i, child) in ex.children.into_iter().enumerate() {
-                    if i == 2 {
-                        self.text.push("".to_string());
-                    }
-                    self.compile_expr(child);
-                }
+                let [a, b] = ex.children;
+
+                self.compile_expr(a);
+                self.compile_expr(b);
             }
             Expr::UnOp(ex) => (), // TODO: implement unary ops
             Expr::Number(num) => {
-                self.text.push(format!("    mov eax, {num}"));
+                self.text.push(format!("    mov dword [result], {num}"));
             }
         }
     }
 
     pub fn compile(&mut self, expr: Expr<'ex>) {
         self.compile_expr(expr);
+        self.text.push("    push ecx".to_string());
+
+        self.text.push("".to_string());
+        self.text.push("    mov ecx, [result]".to_string());
+        self.text.push("    push ecx".to_string());
+        self.text.push("".to_string());
+        self.text.push("    lea esi, [buffer]".to_string());
+        self.text.push("    mov eax, [result]".to_string());
+        self.text.push("    call int_to_string".to_string());
+        self.text.push("".to_string());
+        self.text.push("    mov ecx, eax".to_string());
+        self.text.push("    xor edx, edx".to_string());
+        self.text.push("getlen:".to_string());
+        self.text.push("    cmp byte [ecx + edx], 10".to_string());
+        self.text.push("    jz gotlen".to_string());
+        self.text.push("    inc edx".to_string());
+        self.text.push("    jmp getlen".to_string());
+        self.text.push("gotlen:".to_string());
+        self.text.push("    inc edx".to_string());
+        self.text.push("".to_string());
+        self.text.push("    mov eax, 4".to_string());
+        self.text.push("    mov ebx, 1".to_string());
+        self.text.push("    int 0x80".to_string());
+        self.text.push("".to_string());
+        self.text.push("    pop ecx".to_string());
+        self.text.push("".to_string());
         self.text.push("    mov eax, 1".to_string());
+        self.text.push("    mov ebx, 0".to_string());
         self.text.push("    int 0x80".to_string());
         self.text.push("".to_string());
 
+        self.text.push("    mov eax, 1".to_string());
+        self.text.push("    xor ebx, ebx".to_string());
+        self.text.push("    int 0x80".to_string());
+        self.text.push("".to_string());
+
+        self.text.push("int_to_string:".to_string());
+        self.text.push("    add esi, 9".to_string());
+        self.text.push("    mov byte [esi], 10".to_string());
+        self.text.push("    mov ebx, 10".to_string());
+        self.text.push(".next_digit:".to_string());
+        self.text.push("    xor	edx, edx".to_string());
+        self.text.push("    div	ebx".to_string());
+        self.text.push("    add	dl, '0'".to_string());
+        self.text.push("    dec	esi".to_string());
+        self.text.push("    mov	[esi],dl".to_string());
+        self.text.push("    test	eax, eax".to_string());
+        self.text.push("    jnz	.next_digit".to_string());
+        self.text.push("    mov	eax, esi".to_string());
+        self.text.push("    ret".to_string());
+ 
         let mut file = std::fs::File::create("prog.asm").unwrap();
-        file.write_all(&self.text.join("\n").bytes().collect::<Vec<_>>()).unwrap();
         file.write_all(&self.data.join("\n").bytes().collect::<Vec<_>>()).unwrap();
+        file.write_all(&self.bss.join("\n").bytes().collect::<Vec<_>>()).unwrap();
+        file.write_all(&self.text.join("\n").bytes().collect::<Vec<_>>()).unwrap();
 
         std::process::Command::new("nasm")
-            .args(["-f", "elf64", "prog.asm"])
+            .args(["-f", "elf32", "prog.asm"])
             .output().unwrap();
         std::process::Command::new("ld")
-            .args(["-o", "prog", "prog.o"])
+            .args(["-m", "elf_i386", "-o", "prog", "prog.o"])
             .output().unwrap();
     }
 }
