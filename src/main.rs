@@ -240,23 +240,49 @@ impl<'ex> Compiler {
     }
 
     fn compile_expr(&mut self, expr: Expr<'ex>) {
-        println!("{expr:?}");
+        // println!("{expr:?}");
         match expr {
             Expr::BiOp(ex) => {
                 let [a, b] = ex.children;
 
                 self.compile_expr(a);
                 self.compile_expr(b);
+
+                match ex.kind {
+                    BiOpKind::Add => {
+                        self.text.push("    pop eax".to_string());
+                        self.text.push("    pop ebx".to_string());
+                        self.text.push("    add eax, ebx".to_string());
+                        self.text.push("    push eax".to_string());
+                    }
+                    BiOpKind::Sub => {
+                        self.text.push("    pop eax".to_string());
+                        self.text.push("    pop ebx".to_string());
+                        self.text.push("    sub eax, ebx".to_string());
+                        self.text.push("    test eax, eax".to_string()); // is negative?
+                        self.text.push("    js negative_result".to_string());
+                        self.text.push("    push eax".to_string());
+
+                    }
+                    BiOpKind::Mul => (),
+                    BiOpKind::Div => (),
+                }
+
+                // 1 + 2 * 3
+                //
+                //
             }
             Expr::UnOp(ex) => (), // TODO: implement unary ops
             Expr::Number(num) => {
-                self.text.push(format!("    mov dword [result], {num}"));
+                self.text.push(format!("    push {num}"));
             }
         }
     }
 
     pub fn compile(&mut self, expr: Expr<'ex>) {
         self.compile_expr(expr);
+        self.text.push("    pop eax".to_string());
+        self.text.push("    mov [result], eax".to_string());
         self.text.push("    push ecx".to_string());
 
         self.text.push("".to_string());
@@ -307,6 +333,11 @@ impl<'ex> Compiler {
         self.text.push("    jnz	.next_digit".to_string());
         self.text.push("    mov	eax, esi".to_string());
         self.text.push("    ret".to_string());
+
+        self.text.push("negate_int:".to_string();
+        self.text.push("    pop eax".to_string();
+        self.text.push("    neg eax".to_string();
+        self.text.push("    ret".to_string());
  
         let mut file = std::fs::File::create("prog.asm").unwrap();
         file.write_all(&self.data.join("\n").bytes().collect::<Vec<_>>()).unwrap();
@@ -330,6 +361,8 @@ fn main() -> std::io::Result<()> {
 
     let source = std::fs::read_to_string(file)?;
     let ast = parse_single(source.as_bytes()).unwrap();
+
+    println!("{ast:?}");
 
     Compiler::new().compile(ast);
 
