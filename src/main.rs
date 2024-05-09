@@ -1,11 +1,5 @@
 use std::io::Write;
 
-type N = f64;
-
-enum Instr {
-    Add(N),
-}
-
 struct Tokenizer<'t> {
     source: &'t [u8],
     cursor: usize,
@@ -13,6 +7,7 @@ struct Tokenizer<'t> {
     tokens: Vec<Token<'t>>,
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Token<'t> {
     Number(&'t str),
 
@@ -21,6 +16,9 @@ enum Token<'t> {
 
     Star,
     Slash,
+
+    LParen,
+    RParen,
 }
 
 impl<'t> Token<'t> {
@@ -88,6 +86,8 @@ impl<'t> Tokenizer<'t> {
             '-' => mk_tok!(Token::Minus),
             '*' => mk_tok!(Token::Star),
             '/' => mk_tok!(Token::Slash),
+            '(' => mk_tok!(Token::LParen),
+            ')' => mk_tok!(Token::RParen),
             _ => (),
         }
 
@@ -109,6 +109,7 @@ impl<'t> Tokenizer<'t> {
 #[derive(Debug)]
 enum Expr<'e> {
     Number  (&'e str),
+    SubExpr (Box<Expr<'e>>),
     UnOp    (Box<UnOpEx<'e>>),
     BiOp    (Box<BiOpEx<'e>>),
 }
@@ -178,14 +179,27 @@ impl<'p, 't> Parser<'p, 't> {
         self.tokens.get(self.cursor - 1)
     }
 
+    fn expect_next(&mut self, token: &Token<'t>) {
+        if let Some(tok) = self.next() {
+            if tok == token { return; }
+            panic!("expected token of type: {token:?} but found {tok:?}!");
+        }
+
+        panic!("expected token of type: {token:?} but found nothing!");
+    }
+
     fn parse_leading_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
         let tok = self.next()?;
 
-        if let Token::Number(n) = tok {
-            return Some(Expr::Number(n));
+        match tok {
+            Token::Number(n) => Some(Expr::Number(n)),
+            Token::LParen    => {
+                let expr = self.parse_expr(0)?;
+                self.expect_next(&Token::RParen);
+                Some(Expr::SubExpr(Box::new(expr)))
+            }
+            _ => None,
         }
-
-        None
     }
 
     fn parse_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
@@ -214,7 +228,7 @@ impl<'p, 't> Parser<'p, 't> {
     } 
 }
 
-pub fn parse_single<'t>(source: &'t [u8]) -> Option<Expr<'t>> {
+fn parse_single<'t>(source: &'t [u8]) -> Option<Expr<'t>> {
     let tokens = Tokenizer::tokenize(source);
     let mut p = Parser::new(&tokens);
     p.parse_expr(0)
@@ -265,13 +279,14 @@ impl<'ex> Compiler {
                 self.text.push(ts("    push eax"));
             }
             Expr::UnOp(ex) => (), // TODO: implement unary ops
+            Expr::SubExpr(ex) => self.compile_expr(*ex),
             Expr::Number(num) => {
                 self.text.push(format!("    push {num}"));
             }
         }
     }
 
-    pub fn compile(&mut self, expr: Expr<'ex>) {
+    fn compile(&mut self, expr: Expr<'ex>) {
         self.compile_expr(expr);
         self.text.push(ts("    pop eax"));
         self.text.push(ts("    mov [result], eax"));
