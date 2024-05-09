@@ -4,4 +4,6 @@ Cargo.lock
 
 # Added by cargo
 
-/target
+prog.asm
+prog.o
+prog
