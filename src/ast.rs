@@ -9,7 +9,7 @@ pub enum Expr<'e> {
 #[derive(Debug)]
 pub enum UnOpKind {
     Not,
-    Negate,
+    Neg,
 }
 
 #[derive(Debug)]

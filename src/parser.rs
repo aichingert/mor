@@ -11,11 +11,14 @@ pub struct Tokenizer<'t> {
 pub enum Token<'t> {
     Number(&'t str),
 
+    // binops
     Plus,
     Minus,
-
     Star,
     Slash,
+
+    // unops
+    Not,
 
     LParen,
     RParen,
@@ -24,10 +27,18 @@ pub enum Token<'t> {
 impl<'t> Token<'t> {
     fn try_biop(&self) -> Option<BiOpKind> {
         match self {
-            Token::Plus => Some(BiOpKind::Add),
+            Token::Plus  => Some(BiOpKind::Add),
             Token::Minus => Some(BiOpKind::Sub),
-            Token::Star => Some(BiOpKind::Mul),
+            Token::Star  => Some(BiOpKind::Mul),
             Token::Slash => Some(BiOpKind::Div),
+            _ => None,
+        }
+    }
+
+    fn try_unop(&self) -> Option<UnOpKind> {
+        match self {
+            Token::Not   => Some(UnOpKind::Not),
+            Token::Minus => Some(UnOpKind::Neg),
             _ => None,
         }
     }
@@ -86,6 +97,7 @@ impl<'t> Tokenizer<'t> {
             '-' => mk_tok!(Token::Minus),
             '*' => mk_tok!(Token::Star),
             '/' => mk_tok!(Token::Slash),
+            '!' => mk_tok!(Token::Not),
             '(' => mk_tok!(Token::LParen),
             ')' => mk_tok!(Token::RParen),
             _ => (),
@@ -125,7 +137,7 @@ impl<'p, 't> Parser<'p, 't> {
         self.tokens.get(self.cursor - 1)
     }
 
-    fn expect_next(&mut self, token: &Token<'t>) {
+    fn expect(&mut self, token: &Token<'t>) {
         if let Some(tok) = self.next() {
             if tok == token { return; }
             panic!("expected token of type: {token:?} but found {tok:?}!");
@@ -135,17 +147,28 @@ impl<'p, 't> Parser<'p, 't> {
     }
 
     fn parse_leading_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
-        let tok = self.next()?;
-
-        match tok {
-            Token::Number(n) => Some(Expr::Number(n)),
-            Token::LParen    => {
-                let expr = self.parse_expr(0)?;
-                self.expect_next(&Token::RParen);
-                Some(Expr::SubExpr(Box::new(expr)))
-            }
-            _ => None,
+        let tok = *self.next()?;
+        
+        if let Token::Number(n) = tok {
+            return Some(Expr::Number(n));
         }
+
+        if Token::LParen == tok {
+            let expr = self.parse_expr(0)?;
+            self.expect(&Token::RParen);
+            return Some(Expr::SubExpr(Box::new(expr)));
+        }
+
+        if let Some(unop) = tok.try_unop() {
+            let expr = self.parse_expr(prec)?;
+
+            return Some(Expr::UnOp(Box::new(UnOpEx {
+                kind: unop,
+                child: expr,
+            })));
+        }
+
+        None
     }
 
     fn parse_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
@@ -166,6 +189,8 @@ impl<'p, 't> Parser<'p, 't> {
                     continue;
                 }
             }
+
+
 
             break;
         }

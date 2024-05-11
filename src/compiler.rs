@@ -46,7 +46,17 @@ impl<'ex> Compiler {
 
                 self.text.push(ts("    push eax"));
             }
-            Expr::UnOp(ex) => (), // TODO: implement unary ops
+            Expr::UnOp(ex) => {
+                self.compile_expr(ex.child);
+                self.text.push(ts("    pop eax"));
+
+                match ex.kind {
+                    UnOpKind::Not => self.text.push(ts("   not eax")),
+                    UnOpKind::Neg => self.text.push(ts("   neg eax")),
+                }
+
+                self.text.push(ts("    push eax"));
+            }
             Expr::SubExpr(ex) => self.compile_expr(*ex),
             Expr::Number(num) => {
                 self.text.push(format!("    push {num}"));
