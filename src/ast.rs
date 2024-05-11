@@ -1,9 +1,40 @@
 #[derive(Debug)]
+pub enum Stmt<'s> {
+    Expr    (Expr<'s>),
+    Local   (Local<'s>),
+}
+
+#[derive(Debug)]
+pub struct Local<'l> {
+    pub name: &'l str,
+    // Option to support => let x;
+    pub value: Option<Expr<'l>>,
+}
+
+impl<'l> Local<'l> {
+    pub fn new(name: &'l str, value: Option<Expr<'l>>) -> Self {
+        Self { name, value }
+    }
+}
+
+#[derive(Debug)]
 pub enum Expr<'e> {
     Number  (&'e str),
+    Ident   (Ident<'e>),
     SubExpr (Box<Expr<'e>>),
     UnOp    (Box<UnOpEx<'e>>),
     BiOp    (Box<BiOpEx<'e>>),
+}
+
+#[derive(Debug)]
+pub struct Ident<'i> {
+    pub value: &'i str,
+}
+
+impl<'i> Ident<'i> {
+    pub fn new(value: &'i str) -> Self {
+        Ident { value }
+    }
 }
 
 #[derive(Debug)]

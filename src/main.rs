@@ -1,7 +1,7 @@
 mod ast;
 
 mod parser;
-use parser::parse_single;
+use parser::*;
 
 mod compiler;
 use compiler::*;
@@ -13,11 +13,14 @@ fn main() -> std::io::Result<()> {
     };
 
     let source = std::fs::read_to_string(file)?;
-    let ast = parse_single(source.as_bytes()).unwrap();
+    let stmts = parse(source.as_bytes()).unwrap();
 
-    println!("{ast:?}");
+    for stmt in stmts {
+        println!("{stmt:?}");
+    }
 
-    Compiler::new().compile(ast);
+    // BREAKING CHANGES handle statements when compiling
+    //Compiler::new().compile(ast);
 
     Ok(())
 }

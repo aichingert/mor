@@ -9,6 +9,7 @@ pub struct Tokenizer<'t> {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Token<'t> {
+    Ident(&'t str),
     Number(&'t str),
 
     // binops
@@ -20,8 +21,14 @@ pub enum Token<'t> {
     // unops
     Not,
 
+    // sp
     LParen,
     RParen,
+    Assign,
+    Semicolon,
+
+    // KW
+    KwLet
 }
 
 impl<'t> Token<'t> {
@@ -81,7 +88,7 @@ impl<'t> Tokenizer<'t> {
     }
 
     fn next_token(&mut self) -> Option<Token<'t>> {
-        self.consume_ch_while(|c| c == ' ');
+        self.consume_ch_while(|c| c == ' ' || c == '\n');
 
         macro_rules! mk_tok {
             ($td: expr) => {{
@@ -100,10 +107,26 @@ impl<'t> Tokenizer<'t> {
             '!' => mk_tok!(Token::Not),
             '(' => mk_tok!(Token::LParen),
             ')' => mk_tok!(Token::RParen),
+            '=' => mk_tok!(Token::Assign),
+            ';' => mk_tok!(Token::Semicolon),
             _ => (),
         }
 
         let src = self.cursor;
+
+        if at.is_ascii_alphabetic() {
+            self.consume_ch_while(|c| c.is_ascii_alphabetic());
+
+            let value = &self.source[src..self.cursor];
+            let value = unsafe { core::str::from_utf8_unchecked(value) };
+
+            match value {
+                "let" => return Some(Token::KwLet),
+                _ => (),
+            }
+
+            return Some(Token::Ident(value));
+        }
 
         if at.is_ascii_digit() {
             self.consume_ch_while(|c| c.is_ascii_digit());
@@ -116,6 +139,7 @@ impl<'t> Tokenizer<'t> {
         self.consume_ch(1);
         None
     }
+
 }
 
 pub struct Parser<'p, 't> {
@@ -146,8 +170,20 @@ impl<'p, 't> Parser<'p, 't> {
         panic!("expected token of type: {token:?} but found nothing!");
     }
 
+    fn expect_ident(&mut self) -> &'t str {
+        if let Some(Token::Ident(id)) = self.next() {
+            return id;
+        }
+
+        panic!("expected identifier");
+    }
+
     fn parse_leading_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
         let tok = *self.next()?;
+
+        if let Token::Ident(id) = tok {
+            return Some(Expr::Ident(Ident::new(id)));
+        }
         
         if let Token::Number(n) = tok {
             return Some(Expr::Number(n));
@@ -190,17 +226,44 @@ impl<'p, 't> Parser<'p, 't> {
                 }
             }
 
-
-
             break;
         }
 
         Some(res)
     }
+
+    pub fn parse_block(&mut self) -> Option<Vec<Stmt<'t>>> {
+        let mut stmts = Vec::new();
+
+        while let Some(&at) = self.peek(0) {
+            if Token::Semicolon == at {
+                self.next().unwrap();
+                continue;
+            }
+
+            if Token::KwLet == at {
+                self.next().unwrap();
+                let name = self.expect_ident();
+
+                let mut value = None;
+                if let Some(Token::Assign) = self.peek(0) {
+                    self.next().unwrap();
+                    value = Some(self.parse_expr(0)?);
+                }
+
+                stmts.push(Stmt::Local(Local::new(name, value)));
+            } else {
+                let expr = self.parse_expr(0)?;
+                stmts.push(Stmt::Expr(expr));
+            }
+        }
+
+        Some(stmts)
+    }
 }
 
-pub fn parse_single<'t>(source: &'t [u8]) -> Option<Expr<'t>> {
+pub fn parse<'p>(source: &'p [u8]) -> Option<Vec<Stmt<'p>>> {
     let tokens = Tokenizer::tokenize(source);
     let mut p = Parser::new(&tokens);
-    p.parse_expr(0)
+    p.parse_block()
 }

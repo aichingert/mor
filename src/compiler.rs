@@ -61,6 +61,7 @@ impl<'ex> Compiler {
             Expr::Number(num) => {
                 self.text.push(format!("    push {num}"));
             }
+            Expr::Ident(id) => {} // TODO: varible support
         }
     }
 
