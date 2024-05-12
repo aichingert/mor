@@ -134,11 +134,13 @@ impl<'s> Compiler {
                     return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
                 };
 
-                self.text.push(Opcode::Push(Operand::Indexed(Register::RSP, offset)));
+                self.text.push(Opcode::Push(Operand::Indexed(Register::RSP, self.rsp - offset)));
+                self.rsp += 8;
             }
             Expr::Number(n) => {
                 let val = n.parse().map_err(|_| CompileError::new("number too large"))?;
                 self.text.push(Opcode::Push(Operand::Immediate(val)));
+                self.rsp += 8;
             }
             Expr::SubExpr(ex) => self.compile_expr(*ex)?,
             Expr::BiOp(ex) => {
@@ -146,6 +148,7 @@ impl<'s> Compiler {
 
                 self.compile_expr(a)?;
                 self.compile_expr(b)?;
+                self.rsp -= 16;
 
                 let rax = Operand::Reg(Register::RAX);
                 let rbx = Operand::Reg(Register::RBX);
@@ -164,12 +167,14 @@ impl<'s> Compiler {
                 }
 
                 self.text.push(Opcode::Push(rax));
+                self.rsp += 8;
             }
             Expr::UnOp(ex) => {
                 self.compile_expr(ex.child)?;
                 let rax = Operand::Reg(Register::RAX);
 
                 self.text.push(Opcode::Pop(rax));
+                self.rsp -= 8;
 
                 match ex.kind {
                     UnOpKind::Not => self.text.push(Opcode::Not(rax)),
@@ -177,6 +182,7 @@ impl<'s> Compiler {
                 }
 
                 self.text.push(Opcode::Push(rax));
+                self.rsp += 8;
             }
         }
 
@@ -188,13 +194,13 @@ impl<'s> Compiler {
             self.compile_expr(val)?;
         }
 
-        self.idents.insert(local.name.to_string(), self.rsp);
-        self.rsp += 8;
+        self.idents.insert(local.name.to_string(), (self.idents.len() + 1) as i32 * 8);
 
         Ok(())
     }
 
     fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
+        println!("{}", self.rsp);
         match stmt {
             Stmt::Expr(ex)   => self.compile_expr(ex),
             Stmt::Local(loc) => self.compile_local(loc),
@@ -204,7 +210,7 @@ impl<'s> Compiler {
     fn emit_asm(&self) -> std::io::Result<()> {
         let mut file = std::fs::File::create("prog.asm")?;
 
-        file.write_all(b"extern printf\ndefault rel\n\nsection .text\n  global main\nmain:\n")?;
+        file.write_all(b"section .text\n  global main\nmain:\n")?;
 
         for opcode in self.text.iter() {
             let mut line = match opcode {
@@ -224,7 +230,9 @@ impl<'s> Compiler {
             file.write_all(&line.bytes().collect::<Vec<_>>())?;
         }
 
-        file.write_all(b"    mov rax, 0\n    ret\nsection .data\n    ifmt: db \"%d\", 10, 0")?;
+        file.write_all(b"    mov rax, 60\n")?;
+        file.write_all(b"    pop rdi\n")?;
+        file.write_all(b"    syscall\n")?;
 
         Ok(())
     }

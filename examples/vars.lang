@@ -1,0 +1,2 @@
+let hello = 5;
+let world = 3 + hello;
