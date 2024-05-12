@@ -15,12 +15,7 @@ fn main() -> std::io::Result<()> {
     let source = std::fs::read_to_string(file)?;
     let stmts = parse(source.as_bytes()).unwrap();
 
-    for stmt in stmts {
-        println!("{stmt:?}");
-    }
-
-    // BREAKING CHANGES handle statements when compiling
-    //Compiler::new().compile(ast);
+    Compiler::compile(stmts).unwrap();
 
     Ok(())
 }

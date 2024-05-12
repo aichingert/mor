@@ -1,3 +1,2 @@
-let hello = 0;
----10;
+let hello = 30;
 10 + hello

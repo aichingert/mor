@@ -1,137 +1,242 @@
 use std::io::Write;
+use std::collections::HashMap;
 
 use crate::ast::*;
 
-pub struct Compiler {
-    text: Vec<String>,
-    data: Vec<String>,
-    bss:  Vec<String>,
+#[derive(Debug, Clone, Copy)]
+enum Register {
+    RAX,
+    RBX,
+    RCX,
+    RDX,
+    RSI,
+    RDI,
+    RBP,
+    RSP,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
 }
 
-fn ts(s:&str) -> String { s.to_string() }
-
-impl<'ex> Compiler {
-    pub fn new() -> Self {
-        let conv = |v: Vec<&str>| {
-            v.into_iter().map(|s| ts(s)).collect::<Vec<_>>()
-        };
-
-        let data = conv(vec!["segment    .data", "    result dd 0", ""]);
-        let bss  = conv(vec!["segment    .bss", "    buffer resb 12 ; 4", ""]);
-        let text = conv(vec!["segment    .text", "global     _start", "_start: "]);
-
-        Self { text, data, bss }
+impl Register {
+    fn to_str(&self) -> &str {
+        match self {
+            Register::RAX => "rax",
+            Register::RBX => "rbx",
+            Register::RCX => "rcx",
+            Register::RDX => "rdx",
+            Register::RSI => "rsi",
+            Register::RDI => "rdi",
+            Register::RBP => "rbp",
+            Register::RSP => "rsp",
+            _ => todo!()
+        }
     }
+}
 
-    fn compile_expr(&mut self, expr: Expr<'ex>) {
-        match expr {
-            Expr::BiOp(ex) => {
-                let [a, b] = ex.children;
+#[derive(Debug, Clone, Copy)]
+enum Operand {
+    Reg(Register), // ex: mov !rax!, 1
+    Val(Register), // ex: mov rbx, ![rax]!
+    Implicit, // TODO
+    Immediate(i64),// ex: mov rax, !1!
+    Direct(i64),   // ex: mov rax, ![0x1234]!
+    // TODO: not sure if this is needed - difference to indexed comes from the past where only
+    Based(Register, i32), 
+    Indexed(Register, i32), // ex: mov rax, ![rsp + 8]!
+}
 
-                self.compile_expr(a);
-                self.compile_expr(b);
+impl Operand {
+    fn to_str(&self) -> String {
+        match self {
+            Operand::Reg(reg) => format!("{}", reg.to_str()),
+            Operand::Val(reg) => format!("[{}]", reg.to_str()),
+            Operand::Immediate(val) => format!("{val}"),
+            Operand::Indexed(reg, off) => format!("qword [{} + {off}]", reg.to_str()),
+            _ => todo!(),
+        }
+    }
+}
 
-                self.text.push(ts("    pop ebx"));
-                self.text.push(ts("    pop eax"));
+#[derive(Debug)]
+enum Opcode {
+    Add(Operand, Operand),
+    Sub(Operand, Operand),
+    Cdq,
+    Div(Operand),
+    Mul(Operand),
 
-                match ex.kind {
-                    BiOpKind::Add => self.text.push(ts("    add eax, ebx")),
-                    BiOpKind::Sub => self.text.push(ts("    sub eax, ebx")),
-                    BiOpKind::Mul => self.text.push(ts("    imul bx")),
-                    BiOpKind::Div => {
-                        self.text.push(ts("    cdq"));
-                        self.text.push(ts("    idiv ebx"));
-                    }
-                }
+    Not(Operand),
+    Neg(Operand),
 
-                self.text.push(ts("    push eax"));
-            }
-            Expr::UnOp(ex) => {
-                self.compile_expr(ex.child);
-                self.text.push(ts("    pop eax"));
+    Pop(Operand),
+    Push(Operand),
+}
 
-                match ex.kind {
-                    UnOpKind::Not => self.text.push(ts("   not eax")),
-                    UnOpKind::Neg => self.text.push(ts("   neg eax")),
-                }
+#[derive(Debug)]
+pub struct CompileError {
+    msg: String,
+}
 
-                self.text.push(ts("    push eax"));
-            }
-            Expr::SubExpr(ex) => self.compile_expr(*ex),
-            Expr::Number(num) => {
-                self.text.push(format!("    push {num}"));
-            }
-            Expr::Ident(id) => {} // TODO: varible support
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+
+impl CompileError {
+    fn new(msg: &str) -> CompileError {
+        CompileError { msg: msg.to_string() }
+    }
+}
+
+impl std::error::Error for CompileError {
+    fn description(&self) -> &str {
+        &self.msg
+    }
+}
+
+#[derive(Debug)]
+pub struct Compiler {
+    rsp: i32,
+
+    text: Vec<Opcode>, // section
+    idents: HashMap<String, i32>,
+}
+
+// SIZES
+// byte => 8 bit usigned
+// WORD => 16 bit unsigned (SWORD)
+// DWORD => 32 bit unsigned (SDWORD)
+// QWORD => 64 bit
+
+impl<'s> Compiler {
+    fn new() -> Self {
+        Self { 
+            rsp: 0, 
+            text: Vec::new(),
+            idents: HashMap::new(),
         }
     }
 
-    pub fn compile(&mut self, expr: Expr<'ex>) {
-        self.compile_expr(expr);
-        self.text.push(ts("    pop eax"));
-        self.text.push(ts("    mov [result], eax"));
-        self.text.push(ts("    push ecx"));
+    // nasm prog.asm -f elf64 -o prog.o
+    // gcc -no-pie prog.o
 
-        self.text.push(ts(""));
-        self.text.push(ts("    mov ecx, [result]"));
-        self.text.push(ts("    push ecx"));
-        self.text.push(ts(""));
-        self.text.push(ts("    lea esi, [buffer]"));
-        self.text.push(ts("    mov eax, [result]"));
-        self.text.push(ts("    call int_to_string"));
-        self.text.push(ts(""));
-        self.text.push(ts("    mov ecx, eax"));
-        self.text.push(ts("    xor edx, edx"));
-        self.text.push(ts("getlen:"));
-        self.text.push(ts("    cmp byte [ecx + edx], 10"));
-        self.text.push(ts("    jz gotlen"));
-        self.text.push(ts("    inc edx"));
-        self.text.push(ts("    jmp getlen"));
-        self.text.push(ts("gotlen:"));
-        self.text.push(ts("    inc edx"));
-        self.text.push(ts(""));
-        self.text.push(ts("    mov eax, 4"));
-        self.text.push(ts("    mov ebx, 1"));
-        self.text.push(ts("    int 0x80"));
-        self.text.push(ts(""));
-        self.text.push(ts("    pop ecx"));
-        self.text.push(ts(""));
-        self.text.push(ts("    mov eax, 1"));
-        self.text.push(ts("    mov ebx, 0"));
-        self.text.push(ts("    int 0x80"));
-        self.text.push(ts(""));
+    fn compile_expr(&mut self, expr: Expr<'s>) -> Result<(), CompileError> {
+        match expr {
+            Expr::Ident(id) => {
+                let Some(&offset) = self.idents.get(id.value) else {
+                    return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                };
 
-        self.text.push(ts("    mov eax, 1"));
-        self.text.push(ts("    xor ebx, ebx"));
-        self.text.push(ts("    int 0x80"));
-        self.text.push(ts(""));
+                self.text.push(Opcode::Push(Operand::Indexed(Register::RSP, offset)));
+            }
+            Expr::Number(n) => {
+                let val = n.parse().map_err(|_| CompileError::new("number too large"))?;
+                self.text.push(Opcode::Push(Operand::Immediate(val)));
+            }
+            Expr::SubExpr(ex) => self.compile_expr(*ex)?,
+            Expr::BiOp(ex) => {
+                let [a, b] = ex.children;
 
-        self.text.push(ts("int_to_string:"));
-        self.text.push(ts("    add esi, 9"));
-        self.text.push(ts("    mov byte [esi], 10"));
-        self.text.push(ts("    mov ebx, 10"));
-        self.text.push(ts(".next_digit:"));
-        self.text.push(ts("    xor	edx, edx"));
-        self.text.push(ts("    div	ebx"));
-        self.text.push(ts("    add	dl, '0'"));
-        self.text.push(ts("    dec	esi"));
-        self.text.push(ts("    mov	[esi],dl"));
-        self.text.push(ts("    test	eax, eax"));
-        self.text.push(ts("    jnz	.next_digit"));
-        self.text.push(ts("    mov	eax, esi"));
-        self.text.push(ts("    ret"));
+                self.compile_expr(a)?;
+                self.compile_expr(b)?;
 
-        let mut file = std::fs::File::create("prog.asm").unwrap();
-        file.write_all(&self.data.join("\n").bytes().collect::<Vec<_>>()).unwrap();
-        file.write_all(&self.bss.join("\n").bytes().collect::<Vec<_>>()).unwrap();
-        file.write_all(&self.text.join("\n").bytes().collect::<Vec<_>>()).unwrap();
+                let rax = Operand::Reg(Register::RAX);
+                let rbx = Operand::Reg(Register::RBX);
 
-        std::process::Command::new("nasm")
-            .args(["-f", "elf32", "prog.asm"])
-            .output().unwrap();
-        std::process::Command::new("ld")
-            .args(["-m", "elf_i386", "-o", "prog", "prog.o"])
-            .output().unwrap();
+                self.text.push(Opcode::Pop(rbx));
+                self.text.push(Opcode::Pop(rax));
+
+                match ex.kind {
+                    BiOpKind::Add => self.text.push(Opcode::Add(rax, rbx)),
+                    BiOpKind::Sub => self.text.push(Opcode::Sub(rax, rbx)),
+                    BiOpKind::Mul => self.text.push(Opcode::Mul(rbx)),
+                    BiOpKind::Div => {
+                        self.text.push(Opcode::Cdq);
+                        self.text.push(Opcode::Div(rbx));
+                    }
+                }
+
+                self.text.push(Opcode::Push(rax));
+            }
+            Expr::UnOp(ex) => {
+                self.compile_expr(ex.child)?;
+                let rax = Operand::Reg(Register::RAX);
+
+                self.text.push(Opcode::Pop(rax));
+
+                match ex.kind {
+                    UnOpKind::Not => self.text.push(Opcode::Not(rax)),
+                    UnOpKind::Neg => self.text.push(Opcode::Neg(rax)),
+                }
+
+                self.text.push(Opcode::Push(rax));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn compile_local(&mut self, local: Local<'s>) -> Result<(), CompileError> {
+        if let Some(val) = local.value {
+            self.compile_expr(val)?;
+        }
+
+        self.idents.insert(local.name.to_string(), self.rsp);
+        self.rsp += 8;
+
+        Ok(())
+    }
+
+    fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
+        match stmt {
+            Stmt::Expr(ex)   => self.compile_expr(ex),
+            Stmt::Local(loc) => self.compile_local(loc),
+        }
+    }
+
+    fn emit_asm(&self) -> std::io::Result<()> {
+        let mut file = std::fs::File::create("prog.asm")?;
+
+        file.write_all(b"extern printf\ndefault rel\n\nsection .text\n  global main\nmain:\n")?;
+
+        for opcode in self.text.iter() {
+            let mut line = match opcode {
+                Opcode::Add(op1, op2) => format!("    add {}, {}", op1.to_str(), op2.to_str()),
+                Opcode::Sub(op1, op2) => format!("    sub {}, {}", op1.to_str(), op2.to_str()),
+                Opcode::Mul(op) => format!("    imul {}", op.to_str()),
+                Opcode::Div(op) => format!("    idiv {}", op.to_str()),
+                Opcode::Neg(op) => format!("    neg {}", op.to_str()),
+                Opcode::Not(op) => format!("    not {}", op.to_str()),
+
+                Opcode::Pop(op) => format!("    pop {}", op.to_str()),
+                Opcode::Push(op) => format!("    push {}", op.to_str()),
+
+                Opcode::Cdq => "    cdq".to_string(),
+            };
+            line.push('\n');
+            file.write_all(&line.bytes().collect::<Vec<_>>())?;
+        }
+
+        file.write_all(b"    mov rax, 0\n    ret\nsection .data\n    ifmt: db \"%d\", 10, 0")?;
+
+        Ok(())
+    }
+
+    pub fn compile(stmts: Vec<Stmt<'s>>) -> Result<(), CompileError> {
+        let mut compiler = Compiler::new();
+
+        for stmt in stmts {
+            compiler.compile_stmt(stmt)?;
+        }
+
+        compiler.emit_asm().map_err(|_| CompileError::new("unable to emit asm"))
     }
 }
-
 
