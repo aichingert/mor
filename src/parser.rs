@@ -34,10 +34,11 @@ pub enum Token<'t> {
 impl<'t> Token<'t> {
     fn try_biop(&self) -> Option<BiOpKind> {
         match self {
-            Token::Plus  => Some(BiOpKind::Add),
-            Token::Minus => Some(BiOpKind::Sub),
-            Token::Star  => Some(BiOpKind::Mul),
-            Token::Slash => Some(BiOpKind::Div),
+            Token::Plus     => Some(BiOpKind::Add),
+            Token::Minus    => Some(BiOpKind::Sub),
+            Token::Star     => Some(BiOpKind::Mul),
+            Token::Slash    => Some(BiOpKind::Div),
+            Token::Assign   => Some(BiOpKind::Set),
             _ => None,
         }
     }

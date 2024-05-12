@@ -49,12 +49,13 @@ pub struct UnOpEx<'u> {
     pub child: Expr<'u>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum BiOpKind {
     Add,
     Sub,
     Mul,
     Div,
+    Set,
 }
 
 impl BiOpKind {
@@ -64,6 +65,7 @@ impl BiOpKind {
             BiOpKind::Sub => 100,
             BiOpKind::Mul => 200,
             BiOpKind::Div => 200,
+            BiOpKind::Set => 900,
         }
     }
     
@@ -73,6 +75,7 @@ impl BiOpKind {
             BiOpKind::Sub => 101,
             BiOpKind::Mul => 201,
             BiOpKind::Div => 201,
+            BiOpKind::Set => 901,
         }
     }
 }

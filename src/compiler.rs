@@ -34,6 +34,7 @@ impl Register {
             Register::RDI => "rdi",
             Register::RBP => "rbp",
             Register::RSP => "rsp",
+            Register::R12 => "r12",
             _ => todo!()
         }
     }
@@ -65,6 +66,7 @@ impl Operand {
 
 #[derive(Debug)]
 enum Opcode {
+    Mov(Operand, Operand),
     Add(Operand, Operand),
     Sub(Operand, Operand),
     Cdq,
@@ -145,13 +147,28 @@ impl<'s> Compiler {
             Expr::SubExpr(ex) => self.compile_expr(*ex)?,
             Expr::BiOp(ex) => {
                 let [a, b] = ex.children;
-
-                self.compile_expr(a)?;
-                self.compile_expr(b)?;
-
                 let rax = Operand::Reg(Register::RAX);
                 let rbx = Operand::Reg(Register::RBX);
 
+                if BiOpKind::Set == ex.kind {
+                    let Expr::Ident(id) = a else {
+                        return Err(CompileError::new("lhs has to be an identifier when setting a value"));
+                    };
+                    let Some(&offset) = self.idents.get(id.value) else {
+                        return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                    };
+
+                    self.compile_expr(b)?;
+
+                    self.text.push(Opcode::Pop(rax));
+                    self.text.push(Opcode::Mov(Operand::Indexed(Register::RSP, self.rsp - offset), rax));
+
+                    return Ok(());
+                }
+
+                self.compile_expr(a)?;
+                self.compile_expr(b)?;
+                
                 self.text.push(Opcode::Pop(rbx));
                 self.text.push(Opcode::Pop(rax));
                 self.rsp -= 16;
@@ -164,6 +181,7 @@ impl<'s> Compiler {
                         self.text.push(Opcode::Cdq);
                         self.text.push(Opcode::Div(rbx));
                     }
+                    _ => unreachable!(),
                 }
 
                 self.text.push(Opcode::Push(rax));
@@ -194,7 +212,11 @@ impl<'s> Compiler {
             self.compile_expr(val)?;
         }
 
-        self.idents.insert(local.name.to_string(), (self.idents.len() + 1) as i32 * 8);
+        if !self.idents.contains_key(local.name) {
+            self.idents.insert(local.name.to_string(), (self.idents.len() + 1) as i32 * 8);
+        } else {
+            self.rsp -= 8;
+        }
 
         Ok(())
     }
@@ -207,13 +229,14 @@ impl<'s> Compiler {
         }
     }
 
-    fn emit_asm(&self) -> std::io::Result<()> {
+    fn emit_asm(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = std::fs::File::create("prog.asm")?;
 
         file.write_all(b"section .text\n  global main\nmain:\n")?;
 
         for opcode in self.text.iter() {
             let mut line = match opcode {
+                Opcode::Mov(op1, op2) => format!("    mov {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Add(op1, op2) => format!("    add {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Sub(op1, op2) => format!("    sub {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Mul(op) => format!("    imul {}", op.to_str()),
@@ -233,6 +256,11 @@ impl<'s> Compiler {
         file.write_all(b"    mov rax, 60\n")?;
         file.write_all(b"    pop rdi\n")?;
         file.write_all(b"    syscall\n")?;
+
+        use std::process::Command;
+        Command::new("nasm").args(["prog.asm", "-f", "elf64", "-o", "prog.o"]).output()?;
+        Command::new("gcc").args(["-no-pie", "prog.o"]).output()?;
+        Command::new("rm").args(["prog.o"]).output()?;
 
         Ok(())
     }
