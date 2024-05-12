@@ -148,13 +148,13 @@ impl<'s> Compiler {
 
                 self.compile_expr(a)?;
                 self.compile_expr(b)?;
-                self.rsp -= 16;
 
                 let rax = Operand::Reg(Register::RAX);
                 let rbx = Operand::Reg(Register::RBX);
 
                 self.text.push(Opcode::Pop(rbx));
                 self.text.push(Opcode::Pop(rax));
+                self.rsp -= 16;
 
                 match ex.kind {
                     BiOpKind::Add => self.text.push(Opcode::Add(rax, rbx)),

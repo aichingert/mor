@@ -1,2 +1,5 @@
-let hello = 5;
-let world = 3 + hello;
+let a = 10;
+let b = a + 5;
+let c = b + 5;
+let d = c + 5;
+d + 5
