@@ -66,6 +66,7 @@ impl Operand {
 
 #[derive(Debug)]
 enum Opcode {
+    Lea(Operand, Operand),
     Mov(Operand, Operand),
     Add(Operand, Operand),
     Sub(Operand, Operand),
@@ -159,6 +160,7 @@ impl<'s> Compiler {
                     };
 
                     self.compile_expr(b)?;
+                    self.rsp -= 8;
 
                     self.text.push(Opcode::Pop(rax));
                     self.text.push(Opcode::Mov(Operand::Indexed(Register::RSP, self.rsp - offset), rax));
@@ -188,8 +190,49 @@ impl<'s> Compiler {
                 self.rsp += 8;
             }
             Expr::UnOp(ex) => {
-                self.compile_expr(ex.child)?;
                 let rax = Operand::Reg(Register::RAX);
+
+                if UnOpKind::Ref == ex.kind {
+                    let Expr::Ident(id) = ex.child else {
+                        return Err(CompileError::new("expected ident"));
+                    };
+                    let Some(&offset) = self.idents.get(id.value) else {
+                        return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                    };
+
+                    self.text.push(Opcode::Lea(rax, Operand::Indexed(Register::RSP, self.rsp - offset)));
+                    self.text.push(Opcode::Push(rax));
+                    self.rsp += 8;
+                    return Ok(());
+                } else if UnOpKind::Deref == ex.kind {
+                    match ex.child.clone() {
+                        Expr::BiOp(ex) => {
+                            match ex.kind {
+                                BiOpKind::Set => {
+                                    let [a, b] = ex.children;
+                                    let Expr::Ident(id) = a else {
+                                        return Err(CompileError::new("lhs has to be an identifier when setting a value"));
+                                    };
+                                    let Some(&offset) = self.idents.get(id.value) else {
+                                        return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                                    };
+
+                                    self.compile_expr(b)?;
+                                    self.rsp -= 8;
+
+                                    self.text.push(Opcode::Pop(rax));
+                                    self.text.push(Opcode::Mov(Operand::Indexed(Register::RSP, self.rsp - offset), rax));
+
+                                    return Ok(());
+                                }
+                                _ => (),
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+
+                self.compile_expr(ex.child)?;
 
                 self.text.push(Opcode::Pop(rax));
                 self.rsp -= 8;
@@ -197,6 +240,7 @@ impl<'s> Compiler {
                 match ex.kind {
                     UnOpKind::Not => self.text.push(Opcode::Not(rax)),
                     UnOpKind::Neg => self.text.push(Opcode::Neg(rax)),
+                    _ => unreachable!(),
                 }
 
                 self.text.push(Opcode::Push(rax));
@@ -222,7 +266,6 @@ impl<'s> Compiler {
     }
 
     fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
-        println!("{}", self.rsp);
         match stmt {
             Stmt::Expr(ex)   => self.compile_expr(ex),
             Stmt::Local(loc) => self.compile_local(loc),
@@ -236,6 +279,7 @@ impl<'s> Compiler {
 
         for opcode in self.text.iter() {
             let mut line = match opcode {
+                Opcode::Lea(op1, op2) => format!("    lea {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Mov(op1, op2) => format!("    mov {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Add(op1, op2) => format!("    add {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Sub(op1, op2) => format!("    sub {}, {}", op1.to_str(), op2.to_str()),

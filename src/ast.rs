@@ -1,23 +1,30 @@
-#[derive(Debug)]
+use crate::Token;
+
+#[derive(Debug, Clone)]
 pub enum Stmt<'s> {
     Expr    (Expr<'s>),
     Local   (Local<'s>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Local<'l> {
     pub name: &'l str,
-    // Option to support => let x;
+
+    // TODO: support => auto x = Expr; 
+    pub is_ptr: bool,
+    pub typ: Option<Token<'l>>,
+
+    // Option to support => i8 x;
     pub value: Option<Expr<'l>>,
 }
 
 impl<'l> Local<'l> {
-    pub fn new(name: &'l str, value: Option<Expr<'l>>) -> Self {
-        Self { name, value }
+    pub fn new(name: &'l str, is_ptr: bool, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
+        Self { name, is_ptr, typ, value }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr<'e> {
     Number  (&'e str),
     Ident   (Ident<'e>),
@@ -26,7 +33,13 @@ pub enum Expr<'e> {
     BiOp    (Box<BiOpEx<'e>>),
 }
 
-#[derive(Debug)]
+struct Struct<'s> {
+    pub name: &'s str,
+
+    pub fields: Vec<Local<'s>>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Ident<'i> {
     pub value: &'i str,
 }
@@ -37,19 +50,21 @@ impl<'i> Ident<'i> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnOpKind {
     Not,
     Neg,
+    Ref,
+    Deref,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnOpEx<'u> {
     pub kind: UnOpKind,
     pub child: Expr<'u>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BiOpKind {
     Add,
     Sub,
@@ -80,7 +95,7 @@ impl BiOpKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BiOpEx<'b> {
     pub kind: BiOpKind,
     pub children: [Expr<'b>; 2],

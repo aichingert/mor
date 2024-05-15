@@ -18,17 +18,31 @@ pub enum Token<'t> {
     Star,
     Slash,
 
+    Or,
+    And,
+
+    BiOr,
+    BiAnd,
+
     // unops
     Not,
 
     // sp
-    LParen,
-    RParen,
+    LParen(char),
+    RParen(char),
+    Comma,
     Assign,
     Semicolon,
 
     // KW
-    KwLet
+    KwStruct,
+
+    // types
+    I08Type,
+    I16Type,
+    I32Type,
+    I64Type,
+    PtrType,
 }
 
 impl<'t> Token<'t> {
@@ -47,6 +61,15 @@ impl<'t> Token<'t> {
         match self {
             Token::Not   => Some(UnOpKind::Not),
             Token::Minus => Some(UnOpKind::Neg),
+            Token::And   => Some(UnOpKind::Ref),
+            Token::Star  => Some(UnOpKind::Deref),
+            _ => None,
+        }
+    }
+
+    fn try_type(&self) -> Option<Self> {
+        match self {
+            Token::I08Type | Token::I16Type | Token::I32Type | Token::I64Type => Some(*self),
             _ => None,
         }
     }
@@ -98,6 +121,18 @@ impl<'t> Tokenizer<'t> {
             }};
         }
 
+        macro_rules! mk_tok2 {
+            ($td1: expr, $nxt: expr, $td2: expr) => {{
+                if self.peek_ch(1) == Some($nxt) {
+                    self.consume_ch(2);
+                    return Some($td2);
+                } else {
+                    self.consume_ch(1);
+                    return Some($td1);
+                }
+            }};
+        }
+
         let at = self.peek_ch(0)?;
 
         match at as char {
@@ -105,29 +140,20 @@ impl<'t> Tokenizer<'t> {
             '-' => mk_tok!(Token::Minus),
             '*' => mk_tok!(Token::Star),
             '/' => mk_tok!(Token::Slash),
+            '|' => mk_tok2!(Token::Or, b'|', Token::BiOr),
+            '&' => mk_tok2!(Token::And, b'&', Token::BiAnd),
             '!' => mk_tok!(Token::Not),
-            '(' => mk_tok!(Token::LParen),
-            ')' => mk_tok!(Token::RParen),
+            '(' => mk_tok!(Token::LParen('(')),
+            ')' => mk_tok!(Token::RParen(')')),
+            '{' => mk_tok!(Token::LParen('{')),
+            '}' => mk_tok!(Token::RParen('}')),
             '=' => mk_tok!(Token::Assign),
+            ',' => mk_tok!(Token::Comma),
             ';' => mk_tok!(Token::Semicolon),
             _ => (),
         }
 
         let src = self.cursor;
-
-        if at.is_ascii_alphabetic() {
-            self.consume_ch_while(|c| c.is_ascii_alphabetic());
-
-            let value = &self.source[src..self.cursor];
-            let value = unsafe { core::str::from_utf8_unchecked(value) };
-
-            match value {
-                "let" => return Some(Token::KwLet),
-                _ => (),
-            }
-
-            return Some(Token::Ident(value));
-        }
 
         if at.is_ascii_digit() {
             self.consume_ch_while(|c| c.is_ascii_digit());
@@ -135,6 +161,24 @@ impl<'t> Tokenizer<'t> {
             let value = &self.source[src..self.cursor];
             let value = unsafe { core::str::from_utf8_unchecked(value) };
             return Some(Token::Number(value));
+        }
+
+        if at.is_ascii_alphabetic() {
+            self.consume_ch_while(|c| c.is_ascii_alphanumeric());
+
+            let value = &self.source[src..self.cursor];
+            let value = unsafe { core::str::from_utf8_unchecked(value) };
+
+            match value {
+                "struct" => return Some(Token::KwStruct),
+                "i8"  => return Some(Token::I08Type),
+                "i16" => return Some(Token::I16Type),
+                "i32" => return Some(Token::I32Type),
+                "i64" => return Some(Token::I64Type),
+                _ => (),
+            }
+
+            return Some(Token::Ident(value));
         }
 
         self.consume_ch(1);
@@ -190,9 +234,9 @@ impl<'p, 't> Parser<'p, 't> {
             return Some(Expr::Number(n));
         }
 
-        if Token::LParen == tok {
+        if Token::LParen('(') == tok {
             let expr = self.parse_expr(0)?;
-            self.expect(&Token::RParen);
+            self.expect(&Token::RParen(')'));
             return Some(Expr::SubExpr(Box::new(expr)));
         }
 
@@ -233,6 +277,26 @@ impl<'p, 't> Parser<'p, 't> {
         Some(res)
     }
 
+    fn parse_var(&mut self) -> Option<Local<'t>> {
+        let typ = self.next().copied();
+        let mut is_ptr = false;
+
+        if &Token::Star == self.peek(0)? {
+            self.next().unwrap();
+            is_ptr = true;
+        }
+
+        let name = self.expect_ident();
+
+        let mut value = None;
+        if let Some(Token::Assign) = self.peek(0) {
+            self.next().unwrap();
+            value = Some(self.parse_expr(0)?);
+        }
+
+        Some(Local::new(name, is_ptr, typ, value))
+    }
+
     pub fn parse_block(&mut self) -> Option<Vec<Stmt<'t>>> {
         let mut stmts = Vec::new();
 
@@ -242,17 +306,26 @@ impl<'p, 't> Parser<'p, 't> {
                 continue;
             }
 
-            if Token::KwLet == at {
+            if let Some(typ) = at.try_type() {
+                stmts.push(Stmt::Local(self.parse_var()?));
+            } else if Token::KwStruct == at {
                 self.next().unwrap();
                 let name = self.expect_ident();
+                self.expect(&Token::LParen('{'));
 
-                let mut value = None;
-                if let Some(Token::Assign) = self.peek(0) {
-                    self.next().unwrap();
-                    value = Some(self.parse_expr(0)?);
+                let mut fields = Vec::new();
+
+                while let Some(&at) = self.peek(0) {
+                    match at {
+                        Token::Comma => { self.next().unwrap(); continue },
+                        Token::RParen('}') => { break },
+                        _ => {}
+                    }
+
+                    fields.push(self.parse_var()?);
                 }
 
-                stmts.push(Stmt::Local(Local::new(name, value)));
+                self.next().unwrap();
             } else {
                 let expr = self.parse_expr(0)?;
                 stmts.push(Stmt::Expr(expr));
