@@ -134,14 +134,14 @@ impl<'s> Compiler {
         match expr {
             Expr::Ident(id) => {
                 let Some(&offset) = self.idents.get(id.value) else {
-                    return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                    return Err(CompileError::new(&format!("137: unkown identifier: {}", id.value)));
                 };
 
                 self.text.push(Opcode::Push(Operand::Indexed(Register::RSP, self.rsp - offset)));
                 self.rsp += 8;
             }
             Expr::Number(n) => {
-                let val = n.parse().map_err(|_| CompileError::new("number too large"))?;
+                let val = n.parse().map_err(|_| CompileError::new("144: number too large"))?;
                 self.text.push(Opcode::Push(Operand::Immediate(val)));
                 self.rsp += 8;
             }
@@ -150,23 +150,6 @@ impl<'s> Compiler {
                 let [a, b] = ex.children;
                 let rax = Operand::Reg(Register::RAX);
                 let rbx = Operand::Reg(Register::RBX);
-
-                if BiOpKind::Set == ex.kind {
-                    let Expr::Ident(id) = a else {
-                        return Err(CompileError::new("lhs has to be an identifier when setting a value"));
-                    };
-                    let Some(&offset) = self.idents.get(id.value) else {
-                        return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
-                    };
-
-                    self.compile_expr(b)?;
-                    self.rsp -= 8;
-
-                    self.text.push(Opcode::Pop(rax));
-                    self.text.push(Opcode::Mov(Operand::Indexed(Register::RSP, self.rsp - offset), rax));
-
-                    return Ok(());
-                }
 
                 self.compile_expr(a)?;
                 self.compile_expr(b)?;
@@ -183,7 +166,7 @@ impl<'s> Compiler {
                         self.text.push(Opcode::Cdq);
                         self.text.push(Opcode::Div(rbx));
                     }
-                    _ => unreachable!(),
+                    BiOpKind::Set => self.text.push(Opcode::Mov(Operand::Indexed(Register::RAX, 0), rbx)),
                 }
 
                 self.text.push(Opcode::Push(rax));
@@ -197,7 +180,7 @@ impl<'s> Compiler {
                         return Err(CompileError::new("expected ident"));
                     };
                     let Some(&offset) = self.idents.get(id.value) else {
-                        return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                        return Err(CompileError::new(&format!("200: unkown identifier: {}", id.value)));
                     };
 
                     self.text.push(Opcode::Lea(rax, Operand::Indexed(Register::RSP, self.rsp - offset)));
@@ -227,6 +210,16 @@ impl<'s> Compiler {
                                 }
                                 _ => (),
                             }
+                        }
+                        Expr::Ident(id) => {
+                            let Some(&offset) = self.idents.get(id.value) else {
+                                return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
+                            };
+
+                            self.text.push(Opcode::Lea(rax, Operand::Indexed(Register::RSP, self.rsp - offset)));
+                            self.text.push(Opcode::Push(rax));
+                            self.rsp += 8;
+                            return Ok(());
                         }
                         _ => (),
                     }

@@ -7,3 +7,4 @@ Cargo.lock
 prog.asm
 prog.o
 prog
+a.out

@@ -241,11 +241,9 @@ impl<'p, 't> Parser<'p, 't> {
         }
 
         if let Some(unop) = tok.try_unop() {
-            let expr = self.parse_expr(prec)?;
-
             return Some(Expr::UnOp(Box::new(UnOpEx {
                 kind: unop,
-                child: expr,
+                child: self.parse_leading_expr(1000)?,
             })));
         }
 
