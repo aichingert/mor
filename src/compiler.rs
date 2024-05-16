@@ -107,9 +107,11 @@ impl std::error::Error for CompileError {
 #[derive(Debug)]
 pub struct Compiler {
     rsp: i32,
+    ptr: bool,
+    deref: bool,
 
     text: Vec<Opcode>, // section
-    idents: HashMap<String, i32>,
+    locals: HashMap<String, i32>,
 }
 
 // SIZES
@@ -122,8 +124,10 @@ impl<'s> Compiler {
     fn new() -> Self {
         Self { 
             rsp: 0, 
+            ptr: false,
+            deref: false,
             text: Vec::new(),
-            idents: HashMap::new(),
+            locals: HashMap::new(),
         }
     }
 
@@ -131,115 +135,56 @@ impl<'s> Compiler {
     // gcc -no-pie prog.o
 
     fn compile_expr(&mut self, expr: Expr<'s>) -> Result<(), CompileError> {
-        match expr {
-            Expr::Ident(id) => {
-                let Some(&offset) = self.idents.get(id.value) else {
-                    return Err(CompileError::new(&format!("137: unkown identifier: {}", id.value)));
-                };
+        let opcode = match expr {
+            Expr::Number(num) => Opcode::Mov(Operand::Reg(Register::RAX), Operand::Immediate(num.parse().map_err(|_| CompileError::new("Number too big"))?)),
+            Expr::Ident(Ident { value }) => {
+                let Some(offset) = self.locals.get(value) else { return Err(CompileError::new("Ident: not found")); };
 
-                self.text.push(Opcode::Push(Operand::Indexed(Register::RSP, self.rsp - offset)));
-                self.rsp += 8;
-            }
-            Expr::Number(n) => {
-                let val = n.parse().map_err(|_| CompileError::new("144: number too large"))?;
-                self.text.push(Opcode::Push(Operand::Immediate(val)));
-                self.rsp += 8;
-            }
-            Expr::SubExpr(ex) => self.compile_expr(*ex)?,
-            Expr::BiOp(ex) => {
-                let [a, b] = ex.children;
-                let rax = Operand::Reg(Register::RAX);
-                let rbx = Operand::Reg(Register::RBX);
+                let (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
 
-                self.compile_expr(a)?;
+                match self.ptr {
+                    true  => { Opcode::Lea(op1, op2) },
+                    false => { Opcode::Mov(op1, op2) }
+                }
+            }
+            Expr::UnOp(unexpr) => {
+                let child = unexpr.child;
+                if unexpr.kind == UnOpKind::Ref { self.ptr = true; }
+                self.compile_expr(child)?;
+
+                match unexpr.kind {
+                    UnOpKind::Neg => Opcode::Neg(Operand::Reg(Register::RAX)),
+                    UnOpKind::Not => Opcode::Not(Operand::Reg(Register::RAX)),
+                    UnOpKind::Ref => {
+                        self.ptr = false;
+                        Opcode::Mov(Operand::Reg(Register::RAX), Operand::Reg(Register::RAX))
+                    }
+                    UnOpKind::Deref => {
+                        self.deref = true;
+                        Opcode::Mov(Operand::Reg(Register::RAX), Operand::Reg(Register::RAX))
+                    }
+                }
+            }
+            Expr::BiOp(biexpr) => {
+                let [a, b] = biexpr.children;
                 self.compile_expr(b)?;
-                
-                self.text.push(Opcode::Pop(rbx));
-                self.text.push(Opcode::Pop(rax));
-                self.rsp -= 16;
+                self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
+                self.compile_expr(a)?;
 
-                match ex.kind {
-                    BiOpKind::Add => self.text.push(Opcode::Add(rax, rbx)),
-                    BiOpKind::Sub => self.text.push(Opcode::Sub(rax, rbx)),
-                    BiOpKind::Mul => self.text.push(Opcode::Mul(rbx)),
+                match biexpr.kind {
+                    BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
+                    BiOpKind::Sub => Opcode::Sub(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
+                    BiOpKind::Mul => Opcode::Mul(Operand::Reg(Register::RDX)),
+                    BiOpKind::Set => Opcode::Mov(Operand::Indexed(Register::RAX, 0), Operand::Reg(Register::RDX)),
                     BiOpKind::Div => {
                         self.text.push(Opcode::Cdq);
-                        self.text.push(Opcode::Div(rbx));
-                    }
-                    BiOpKind::Set => self.text.push(Opcode::Mov(Operand::Indexed(Register::RAX, 0), rbx)),
-                }
-
-                self.text.push(Opcode::Push(rax));
-                self.rsp += 8;
-            }
-            Expr::UnOp(ex) => {
-                let rax = Operand::Reg(Register::RAX);
-
-                if UnOpKind::Ref == ex.kind {
-                    let Expr::Ident(id) = ex.child else {
-                        return Err(CompileError::new("expected ident"));
-                    };
-                    let Some(&offset) = self.idents.get(id.value) else {
-                        return Err(CompileError::new(&format!("200: unkown identifier: {}", id.value)));
-                    };
-
-                    self.text.push(Opcode::Lea(rax, Operand::Indexed(Register::RSP, self.rsp - offset)));
-                    self.text.push(Opcode::Push(rax));
-                    self.rsp += 8;
-                    return Ok(());
-                } else if UnOpKind::Deref == ex.kind {
-                    match ex.child.clone() {
-                        Expr::BiOp(ex) => {
-                            match ex.kind {
-                                BiOpKind::Set => {
-                                    let [a, b] = ex.children;
-                                    let Expr::Ident(id) = a else {
-                                        return Err(CompileError::new("lhs has to be an identifier when setting a value"));
-                                    };
-                                    let Some(&offset) = self.idents.get(id.value) else {
-                                        return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
-                                    };
-
-                                    self.compile_expr(b)?;
-                                    self.rsp -= 8;
-
-                                    self.text.push(Opcode::Pop(rax));
-                                    self.text.push(Opcode::Mov(Operand::Indexed(Register::RSP, self.rsp - offset), rax));
-
-                                    return Ok(());
-                                }
-                                _ => (),
-                            }
-                        }
-                        Expr::Ident(id) => {
-                            let Some(&offset) = self.idents.get(id.value) else {
-                                return Err(CompileError::new(&format!("unkown identifier: {}", id.value)));
-                            };
-
-                            self.text.push(Opcode::Lea(rax, Operand::Indexed(Register::RSP, self.rsp - offset)));
-                            self.text.push(Opcode::Push(rax));
-                            self.rsp += 8;
-                            return Ok(());
-                        }
-                        _ => (),
+                        Opcode::Div(Operand::Reg(Register::RDX))
                     }
                 }
-
-                self.compile_expr(ex.child)?;
-
-                self.text.push(Opcode::Pop(rax));
-                self.rsp -= 8;
-
-                match ex.kind {
-                    UnOpKind::Not => self.text.push(Opcode::Not(rax)),
-                    UnOpKind::Neg => self.text.push(Opcode::Neg(rax)),
-                    _ => unreachable!(),
-                }
-
-                self.text.push(Opcode::Push(rax));
-                self.rsp += 8;
             }
-        }
+            Expr::SubExpr(expr) => return self.compile_expr(*expr),
+        };
+        self.text.push(opcode);
 
         Ok(())
     }
@@ -249,11 +194,10 @@ impl<'s> Compiler {
             self.compile_expr(val)?;
         }
 
-        if !self.idents.contains_key(local.name) {
-            self.idents.insert(local.name.to_string(), (self.idents.len() + 1) as i32 * 8);
-        } else {
-            self.rsp -= 8;
-        }
+        self.locals.insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
+
+        self.text.push(Opcode::Push(Operand::Reg(Register::RAX)));
+        self.rsp += 8;
 
         Ok(())
     }
@@ -267,7 +211,6 @@ impl<'s> Compiler {
 
     fn emit_asm(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = std::fs::File::create("prog.asm")?;
-
         file.write_all(b"section .text\n  global main\nmain:\n")?;
 
         for opcode in self.text.iter() {
@@ -290,8 +233,8 @@ impl<'s> Compiler {
             file.write_all(&line.bytes().collect::<Vec<_>>())?;
         }
 
+        file.write_all(b"    mov rdi, rax\n")?;
         file.write_all(b"    mov rax, 60\n")?;
-        file.write_all(b"    pop rdi\n")?;
         file.write_all(b"    syscall\n")?;
 
         use std::process::Command;
