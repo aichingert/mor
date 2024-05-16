@@ -1,4 +1,4 @@
 i64 ref = 10;
-i64 ptr = ref + 20
-
-ptr + ref
+i64 *ptr = &ref;
+*ptr = 20;
+ref

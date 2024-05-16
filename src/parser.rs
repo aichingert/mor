@@ -304,7 +304,7 @@ impl<'p, 't> Parser<'p, 't> {
                 continue;
             }
 
-            if let Some(typ) = at.try_type() {
+            if at.try_type().is_some() {
                 stmts.push(Stmt::Local(self.parse_var()?));
             } else if Token::KwStruct == at {
                 self.next().unwrap();

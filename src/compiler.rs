@@ -139,8 +139,12 @@ impl<'s> Compiler {
             Expr::Number(num) => Opcode::Mov(Operand::Reg(Register::RAX), Operand::Immediate(num.parse().map_err(|_| CompileError::new("Number too big"))?)),
             Expr::Ident(Ident { value }) => {
                 let Some(offset) = self.locals.get(value) else { return Err(CompileError::new("Ident: not found")); };
+                let (mut op1, mut op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
 
-                let (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
+                if self.deref {
+                    self.text.push(Opcode::Lea(Operand::Reg(Register::RCX), op2));
+                    (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RCX, 0));
+                }
 
                 match self.ptr {
                     true  => { Opcode::Lea(op1, op2) },
@@ -150,6 +154,7 @@ impl<'s> Compiler {
             Expr::UnOp(unexpr) => {
                 let child = unexpr.child;
                 if unexpr.kind == UnOpKind::Ref { self.ptr = true; }
+                if unexpr.kind == UnOpKind::Deref { self.deref = true; }
                 self.compile_expr(child)?;
 
                 match unexpr.kind {
@@ -157,11 +162,11 @@ impl<'s> Compiler {
                     UnOpKind::Not => Opcode::Not(Operand::Reg(Register::RAX)),
                     UnOpKind::Ref => {
                         self.ptr = false;
-                        Opcode::Mov(Operand::Reg(Register::RAX), Operand::Reg(Register::RAX))
+                        return Ok(());
                     }
                     UnOpKind::Deref => {
-                        self.deref = true;
-                        Opcode::Mov(Operand::Reg(Register::RAX), Operand::Reg(Register::RAX))
+                        self.deref = false;
+                        return Ok(());
                     }
                 }
             }
@@ -170,6 +175,16 @@ impl<'s> Compiler {
                 self.compile_expr(b)?;
                 self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
                 self.compile_expr(a)?;
+
+                // *ptr = 20;
+                //
+                // biopex {
+                //  kind = set
+                //  children = [
+                //      deref ptr,
+                //      Number(20)
+                //  ]
+                // }
 
                 match biexpr.kind {
                     BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
