@@ -14,7 +14,7 @@ main:
     push 20
     pop rbx
     pop rax
-    mov rax, rbx
+    mov qword [rax], rbx
 
     ; ref = 20
 
