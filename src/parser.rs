@@ -35,14 +35,12 @@ pub enum Token<'t> {
     Semicolon,
 
     // KW
-    KwStruct,
 
     // types
     I08Type,
     I16Type,
     I32Type,
     I64Type,
-    PtrType,
 }
 
 impl<'t> Token<'t> {
@@ -170,7 +168,6 @@ impl<'t> Tokenizer<'t> {
             let value = unsafe { core::str::from_utf8_unchecked(value) };
 
             match value {
-                "struct" => return Some(Token::KwStruct),
                 "i8"  => return Some(Token::I08Type),
                 "i16" => return Some(Token::I16Type),
                 "i32" => return Some(Token::I32Type),
@@ -306,24 +303,6 @@ impl<'p, 't> Parser<'p, 't> {
 
             if at.try_type().is_some() {
                 stmts.push(Stmt::Local(self.parse_var()?));
-            } else if Token::KwStruct == at {
-                self.next().unwrap();
-                let name = self.expect_ident();
-                self.expect(&Token::LParen('{'));
-
-                let mut fields = Vec::new();
-
-                while let Some(&at) = self.peek(0) {
-                    match at {
-                        Token::Comma => { self.next().unwrap(); continue },
-                        Token::RParen('}') => { break },
-                        _ => {}
-                    }
-
-                    fields.push(self.parse_var()?);
-                }
-
-                self.next().unwrap();
             } else {
                 let expr = self.parse_expr(0)?;
                 stmts.push(Stmt::Expr(expr));

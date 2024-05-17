@@ -33,12 +33,6 @@ pub enum Expr<'e> {
     BiOp    (Box<BiOpEx<'e>>),
 }
 
-struct Struct<'s> {
-    pub name: &'s str,
-
-    pub fields: Vec<Local<'s>>,
-}
-
 #[derive(Debug, Clone)]
 pub struct Ident<'i> {
     pub value: &'i str,

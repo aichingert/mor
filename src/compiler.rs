@@ -153,8 +153,8 @@ impl<'s> Compiler {
             }
             Expr::UnOp(unexpr) => {
                 let child = unexpr.child;
-                if unexpr.kind == UnOpKind::Ref { self.ptr = true; }
-                if unexpr.kind == UnOpKind::Deref { self.deref = true; }
+                self.ptr = unexpr.kind == UnOpKind::Ref;
+                self.deref = unexpr.kind == UnOpKind::Deref;
                 self.compile_expr(child)?;
 
                 match unexpr.kind {
