@@ -28,9 +28,24 @@ impl<'l> Local<'l> {
 pub enum Expr<'e> {
     Number  (&'e str),
     Ident   (Ident<'e>),
+    If      (Box<If<'e>>),
+
     SubExpr (Box<Expr<'e>>),
+
     UnOp    (Box<UnOpEx<'e>>),
     BiOp    (Box<BiOpEx<'e>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct If<'i> {
+    pub condition:  Option<Expr<'i>>,
+    pub on_true:    Block<'i>,
+    pub on_false:   Option<Block<'i>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Block<'b> {
+    pub stmts: Vec<Stmt<'b>>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +80,18 @@ pub enum BiOpKind {
     Mul,
     Div,
     Set,
+
+    BiOr,
+    BiAnd,
+    BoOr,
+    BoAnd,
+
+    CmpE,
+    CmpNe,
+    CmpL,
+    CmpG,
+    CmpLe,
+    CmpGe,
 }
 
 impl BiOpKind {
@@ -74,6 +101,19 @@ impl BiOpKind {
             BiOpKind::Sub => 100,
             BiOpKind::Mul => 200,
             BiOpKind::Div => 200,
+
+            BiOpKind::BiOr => 200,
+            BiOpKind::BiAnd => 201,
+
+            BiOpKind::BoOr => 200,
+            BiOpKind::BoAnd => 201,
+
+            BiOpKind::CmpE => 300,
+            BiOpKind::CmpNe => 300,
+            BiOpKind::CmpG => 300,
+            BiOpKind::CmpL => 300,
+            BiOpKind::CmpLe=> 300,
+            BiOpKind::CmpGe=> 300,
             BiOpKind::Set => 900,
         }
     }
@@ -84,6 +124,19 @@ impl BiOpKind {
             BiOpKind::Sub => 101,
             BiOpKind::Mul => 201,
             BiOpKind::Div => 201,
+
+            BiOpKind::BiOr => 201,
+            BiOpKind::BiAnd => 202,
+
+            BiOpKind::BoOr => 201,
+            BiOpKind::BoAnd => 202,
+
+            BiOpKind::CmpE => 301,
+            BiOpKind::CmpNe => 301,
+            BiOpKind::CmpG => 301,
+            BiOpKind::CmpL => 301,
+            BiOpKind::CmpLe=> 301,
+            BiOpKind::CmpGe=> 301,
             BiOpKind::Set => 901,
         }
     }

@@ -66,6 +66,11 @@ impl Operand {
 
 #[derive(Debug)]
 enum Opcode {
+    Lbl(String),
+    Jne(String),
+
+    Cmp(Operand, Operand),
+
     Lea(Operand, Operand),
     Mov(Operand, Operand),
     Add(Operand, Operand),
@@ -107,6 +112,8 @@ impl std::error::Error for CompileError {
 #[derive(Debug)]
 pub struct Compiler {
     rsp: i32,
+    ifs: i32, 
+
     ptr: bool,
     deref: bool,
 
@@ -124,8 +131,12 @@ impl<'s> Compiler {
     fn new() -> Self {
         Self { 
             rsp: 0, 
+            ifs: 0,
+
             ptr: false,
             deref: false,
+
+
             text: Vec::new(),
             locals: HashMap::new(),
         }
@@ -195,9 +206,24 @@ impl<'s> Compiler {
                         self.text.push(Opcode::Cdq);
                         Opcode::Div(Operand::Reg(Register::RDX))
                     }
+                    BiOpKind::CmpNe => Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
+                    _ => todo!()
                 }
             }
             Expr::SubExpr(expr) => return self.compile_expr(*expr),
+            Expr::If(if_expr)   => {
+                // TODO: implement else and else if
+
+                self.compile_expr(if_expr.condition.expect("TODO: else if"))?;
+                self.text.push(Opcode::Jne(format!("if_{}", self.ifs)));
+
+                for stmt in if_expr.on_true.stmts {
+                    self.compile_stmt(stmt)?;
+                }
+
+                self.ifs += 1;
+                Opcode::Lbl(format!("if_{}:", self.ifs - 1))
+            }
         };
         self.text.push(opcode);
 
@@ -224,12 +250,16 @@ impl<'s> Compiler {
         }
     }
 
-    fn emit_asm(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn emit_asm(self) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = std::fs::File::create("prog.asm")?;
         file.write_all(b"section .text\n  global main\nmain:\n")?;
 
-        for opcode in self.text.iter() {
+        for opcode in self.text.into_iter() {
             let mut line = match opcode {
+                Opcode::Lbl(lbl) => lbl,
+
+                Opcode::Jne(lbl) => format!("    jne {lbl}"),
+                Opcode::Cmp(op1, op2) => format!("    cmp {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Lea(op1, op2) => format!("    lea {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Mov(op1, op2) => format!("    mov {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Add(op1, op2) => format!("    add {}, {}", op1.to_str(), op2.to_str()),
@@ -260,10 +290,10 @@ impl<'s> Compiler {
         Ok(())
     }
 
-    pub fn compile(stmts: Vec<Stmt<'s>>) -> Result<(), CompileError> {
+    pub fn compile(block: Block<'s>) -> Result<(), CompileError> {
         let mut compiler = Compiler::new();
 
-        for stmt in stmts {
+        for stmt in block.stmts {
             compiler.compile_stmt(stmt)?;
         }
 

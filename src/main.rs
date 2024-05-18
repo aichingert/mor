@@ -13,9 +13,10 @@ fn main() -> std::io::Result<()> {
     };
 
     let source = std::fs::read_to_string(file)?;
-    let stmts = parse(source.as_bytes()).unwrap();
+    let block = parse(source.as_bytes()).unwrap();
+    println!("{:?}", block.stmts);
 
-    Compiler::compile(stmts).unwrap();
+    Compiler::compile(block).unwrap();
 
     Ok(())
 }

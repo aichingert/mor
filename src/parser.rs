@@ -18,6 +18,13 @@ pub enum Token<'t> {
     Star,
     Slash,
 
+    E,
+    NE,
+    L,
+    LE,
+    G,
+    GE,
+
     Or,
     And,
 
@@ -28,13 +35,15 @@ pub enum Token<'t> {
     Not,
 
     // sp
-    LParen(char),
-    RParen(char),
+    Paren(char),
     Comma,
     Assign,
     Semicolon,
 
     // KW
+    KwIf,
+    KwElse,
+    KwElIf,
 
     // types
     I08Type,
@@ -51,6 +60,18 @@ impl<'t> Token<'t> {
             Token::Star     => Some(BiOpKind::Mul),
             Token::Slash    => Some(BiOpKind::Div),
             Token::Assign   => Some(BiOpKind::Set),
+
+            Token::Or       => Some(BiOpKind::BiOr),
+            Token::And      => Some(BiOpKind::BiAnd),
+            Token::BiOr     => Some(BiOpKind::BoOr),
+            Token::BiAnd    => Some(BiOpKind::BoAnd),
+
+            Token::E        => Some(BiOpKind::CmpE),
+            Token::NE       => Some(BiOpKind::CmpNe),
+            Token::L        => Some(BiOpKind::CmpL),
+            Token::LE       => Some(BiOpKind::CmpLe),
+            Token::G        => Some(BiOpKind::CmpG),
+            Token::GE       => Some(BiOpKind::CmpGe),
             _ => None,
         }
     }
@@ -140,12 +161,11 @@ impl<'t> Tokenizer<'t> {
             '/' => mk_tok!(Token::Slash),
             '|' => mk_tok2!(Token::Or, b'|', Token::BiOr),
             '&' => mk_tok2!(Token::And, b'&', Token::BiAnd),
-            '!' => mk_tok!(Token::Not),
-            '(' => mk_tok!(Token::LParen('(')),
-            ')' => mk_tok!(Token::RParen(')')),
-            '{' => mk_tok!(Token::LParen('{')),
-            '}' => mk_tok!(Token::RParen('}')),
-            '=' => mk_tok!(Token::Assign),
+            '>' => mk_tok2!(Token::G, b'=', Token::GE),
+            '<' => mk_tok2!(Token::L, b'=', Token::LE),
+            '=' => mk_tok2!(Token::Assign, b'=', Token::E),
+            '!' => mk_tok2!(Token::Not, b'=', Token::NE),
+            '(' | ')' | '{' | '}' => mk_tok!(Token::Paren(at as char)),
             ',' => mk_tok!(Token::Comma),
             ';' => mk_tok!(Token::Semicolon),
             _ => (),
@@ -168,6 +188,12 @@ impl<'t> Tokenizer<'t> {
             let value = unsafe { core::str::from_utf8_unchecked(value) };
 
             match value {
+                // KW
+                "if"  => return Some(Token::KwIf),
+                "else"=> return Some(Token::KwElse),
+                "elif"=> return Some(Token::KwElIf),
+
+                // types
                 "i8"  => return Some(Token::I08Type),
                 "i16" => return Some(Token::I16Type),
                 "i32" => return Some(Token::I32Type),
@@ -231,9 +257,9 @@ impl<'p, 't> Parser<'p, 't> {
             return Some(Expr::Number(n));
         }
 
-        if Token::LParen('(') == tok {
+        if Token::Paren('(') == tok {
             let expr = self.parse_expr(0)?;
-            self.expect(&Token::RParen(')'));
+            self.expect(&Token::Paren(')'));
             return Some(Expr::SubExpr(Box::new(expr)));
         }
 
@@ -242,6 +268,10 @@ impl<'p, 't> Parser<'p, 't> {
                 kind: unop,
                 child: self.parse_leading_expr(1000)?,
             })));
+        }
+
+        if Token::KwIf == tok {
+            return self.parse_if();
         }
 
         None
@@ -292,7 +322,15 @@ impl<'p, 't> Parser<'p, 't> {
         Some(Local::new(name, is_ptr, typ, value))
     }
 
-    pub fn parse_block(&mut self) -> Option<Vec<Stmt<'t>>> {
+    pub fn parse_if(&mut self) -> Option<Expr<'t>> {
+        let cond = self.parse_expr(0)?;
+        self.expect(&Token::Paren('{'));
+        let on_true = self.parse_block()?;
+
+        Some(Expr::If(Box::new(If { condition: Some(cond), on_true, on_false: None })))
+    }
+
+    pub fn parse_block(&mut self) -> Option<Block<'t>> {
         let mut stmts = Vec::new();
 
         while let Some(&at) = self.peek(0) {
@@ -300,20 +338,23 @@ impl<'p, 't> Parser<'p, 't> {
                 self.next().unwrap();
                 continue;
             }
-
-            if at.try_type().is_some() {
-                stmts.push(Stmt::Local(self.parse_var()?));
-            } else {
-                let expr = self.parse_expr(0)?;
-                stmts.push(Stmt::Expr(expr));
+            if Token::Paren('}') == at {
+                self.next().unwrap();
+                break;
             }
+
+            stmts.push(if at.try_type().is_some() {
+                Stmt::Local(self.parse_var()?)
+            } else {
+                Stmt::Expr(self.parse_expr(0)?)
+            })
         }
 
-        Some(stmts)
+        Some(Block { stmts })
     }
 }
 
-pub fn parse<'p>(source: &'p [u8]) -> Option<Vec<Stmt<'p>>> {
+pub fn parse<'p>(source: &'p [u8]) -> Option<Block<'p>> {
     let tokens = Tokenizer::tokenize(source);
     let mut p = Parser::new(&tokens);
     p.parse_block()
