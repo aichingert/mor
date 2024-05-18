@@ -59,12 +59,12 @@ impl<'i> Ident<'i> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnOpKind {
+    Ref = 1,
+    Deref = 2,
     Not,
     Neg,
-    Ref,
-    Deref,
 }
 
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ pub struct UnOpEx<'u> {
     pub child: Expr<'u>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BiOpKind {
     Add,
     Sub,

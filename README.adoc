@@ -1,8 +1,20 @@
-= Lang
+= mor
 :toc:
 :toclevels:
 aichingert
 
-unnamed language trying to be as flexible and easy to use as possible.
-so it can be used in aoc for writing short solutions
+the mor programming language, it was created to build a compiler as a hobby and develop my own programming language where I can play with the syntax as much as I want to be able to write consice and okayish performant programs.
 
+== TODOs:
+
+* [ ] Yet another compiler, ast refactor
+* [ ] Fix pointer bug
+* [ ] Implement else expr
+* [ ] Implement loops
+* [ ] Come up with easy syntax
+* [ ] Maybe delete pointers as a whole because they don't add to the simplistic aspect of the language
+
+== Bugs:
+
+* [ ] wrong pointer dereferencing (*d = &a | a = *d)
+* [ ] probably a few more lurking

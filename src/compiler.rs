@@ -114,9 +114,6 @@ pub struct Compiler {
     rsp: i32,
     ifs: i32, 
 
-    ptr: bool,
-    deref: bool,
-
     text: Vec<Opcode>, // section
     locals: HashMap<String, i32>,
 }
@@ -127,15 +124,14 @@ pub struct Compiler {
 // DWORD => 32 bit unsigned (SDWORD)
 // QWORD => 64 bit
 
+const PTR:   u16 = 0x1;
+const DEREF: u16 = 0x2;
+
 impl<'s> Compiler {
     fn new() -> Self {
         Self { 
             rsp: 0, 
             ifs: 0,
-
-            ptr: false,
-            deref: false,
-
 
             text: Vec::new(),
             locals: HashMap::new(),
@@ -145,47 +141,41 @@ impl<'s> Compiler {
     // nasm prog.asm -f elf64 -o prog.o
     // gcc -no-pie prog.o
 
-    fn compile_expr(&mut self, expr: Expr<'s>) -> Result<(), CompileError> {
+    fn compile_expr(&mut self, expr: Expr<'s>, mut flags: u16) -> Result<(), CompileError> {
         let opcode = match expr {
             Expr::Number(num) => Opcode::Mov(Operand::Reg(Register::RAX), Operand::Immediate(num.parse().map_err(|_| CompileError::new("Number too big"))?)),
             Expr::Ident(Ident { value }) => {
                 let Some(offset) = self.locals.get(value) else { return Err(CompileError::new("Ident: not found")); };
                 let (mut op1, mut op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
 
-                if self.deref {
+                // TODO: fix wrong deref in the second case -> *d = &a | a = *d
+                if flags & DEREF == DEREF {
                     self.text.push(Opcode::Lea(Operand::Reg(Register::RCX), op2));
                     (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RCX, 0));
                 }
 
-                match self.ptr {
+                match flags & PTR == PTR {
                     true  => { Opcode::Lea(op1, op2) },
                     false => { Opcode::Mov(op1, op2) }
                 }
             }
             Expr::UnOp(unexpr) => {
                 let child = unexpr.child;
-                self.ptr = unexpr.kind == UnOpKind::Ref;
-                self.deref = unexpr.kind == UnOpKind::Deref;
-                self.compile_expr(child)?;
+                flags |= unexpr.kind as u16;
+                self.compile_expr(child, flags)?;
 
                 match unexpr.kind {
                     UnOpKind::Neg => Opcode::Neg(Operand::Reg(Register::RAX)),
                     UnOpKind::Not => Opcode::Not(Operand::Reg(Register::RAX)),
-                    UnOpKind::Ref => {
-                        self.ptr = false;
-                        return Ok(());
-                    }
-                    UnOpKind::Deref => {
-                        self.deref = false;
-                        return Ok(());
-                    }
+                    UnOpKind::Ref | UnOpKind::Deref => return Ok(()),
                 }
             }
             Expr::BiOp(biexpr) => {
                 let [a, b] = biexpr.children;
-                self.compile_expr(b)?;
+                if biexpr.kind == BiOpKind::Set { flags |= PTR; }
+                self.compile_expr(b, flags)?;
                 self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
-                self.compile_expr(a)?;
+                self.compile_expr(a, flags)?;
 
                 // *ptr = 20;
                 //
@@ -201,10 +191,7 @@ impl<'s> Compiler {
                     BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
                     BiOpKind::Sub => Opcode::Sub(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
                     BiOpKind::Mul => Opcode::Mul(Operand::Reg(Register::RDX)),
-                    BiOpKind::Set => {
-                        self.ptr = false;
-                        Opcode::Mov(Operand::Indexed(Register::RAX, 0), Operand::Reg(Register::RDX))
-                    }
+                    BiOpKind::Set => Opcode::Mov(Operand::Indexed(Register::RAX, 0), Operand::Reg(Register::RDX)),
                     BiOpKind::Div => {
                         self.text.push(Opcode::Cdq);
                         Opcode::Div(Operand::Reg(Register::RDX))
@@ -213,11 +200,11 @@ impl<'s> Compiler {
                     _ => todo!()
                 }
             }
-            Expr::SubExpr(expr) => return self.compile_expr(*expr),
+            Expr::SubExpr(expr) => return self.compile_expr(*expr, flags),
             Expr::If(if_expr)   => {
                 // TODO: implement else and else if
 
-                self.compile_expr(if_expr.condition.expect("TODO: else if"))?;
+                self.compile_expr(if_expr.condition.expect("TODO: else if"), flags)?;
 
                 self.text.push(Opcode::Jmp("jne".to_string(), format!("if_{}", self.ifs)));
                 for stmt in if_expr.on_true.stmts {
@@ -235,7 +222,7 @@ impl<'s> Compiler {
 
     fn compile_local(&mut self, local: Local<'s>) -> Result<(), CompileError> {
         if let Some(val) = local.value {
-            self.compile_expr(val)?;
+            self.compile_expr(val, 0)?;
         }
 
         self.locals.insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
@@ -248,7 +235,7 @@ impl<'s> Compiler {
 
     fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
         match stmt {
-            Stmt::Expr(ex)   => self.compile_expr(ex),
+            Stmt::Expr(ex)   => self.compile_expr(ex, 0),
             Stmt::Local(loc) => self.compile_local(loc),
         }
     }
@@ -297,7 +284,6 @@ impl<'s> Compiler {
         let mut compiler = Compiler::new();
 
         for stmt in block.stmts {
-            println!("{stmt:?}\n");
             compiler.compile_stmt(stmt)?;
         }
 

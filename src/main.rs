@@ -12,6 +12,11 @@ fn main() -> std::io::Result<()> {
         std::process::exit(1);
     };
 
+    if !file.ends_with(".mor") {
+        println!("lang: \x1b[31mfatal error\x1b[0m: invalid filename [expected .mor]");
+        std::process::exit(1);
+    }
+
     let source = std::fs::read_to_string(file)?;
     let block = parse(source.as_bytes()).unwrap();
 

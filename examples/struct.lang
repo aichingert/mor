@@ -1,6 +1,0 @@
-struct String {
-    i32 len,
-    i32 capacity,
-
-    i8* content,
-}
