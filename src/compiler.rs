@@ -67,7 +67,7 @@ impl Operand {
 #[derive(Debug)]
 enum Opcode {
     Lbl(String),
-    Jne(String),
+    Jmp(String, String),
 
     Cmp(Operand, Operand),
 
@@ -201,12 +201,15 @@ impl<'s> Compiler {
                     BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
                     BiOpKind::Sub => Opcode::Sub(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
                     BiOpKind::Mul => Opcode::Mul(Operand::Reg(Register::RDX)),
-                    BiOpKind::Set => Opcode::Mov(Operand::Indexed(Register::RAX, 0), Operand::Reg(Register::RDX)),
+                    BiOpKind::Set => {
+                        self.ptr = false;
+                        Opcode::Mov(Operand::Indexed(Register::RAX, 0), Operand::Reg(Register::RDX))
+                    }
                     BiOpKind::Div => {
                         self.text.push(Opcode::Cdq);
                         Opcode::Div(Operand::Reg(Register::RDX))
                     }
-                    BiOpKind::CmpNe => Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
+                    BiOpKind::CmpE => Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
                     _ => todo!()
                 }
             }
@@ -215,8 +218,8 @@ impl<'s> Compiler {
                 // TODO: implement else and else if
 
                 self.compile_expr(if_expr.condition.expect("TODO: else if"))?;
-                self.text.push(Opcode::Jne(format!("if_{}", self.ifs)));
 
+                self.text.push(Opcode::Jmp("jne".to_string(), format!("if_{}", self.ifs)));
                 for stmt in if_expr.on_true.stmts {
                     self.compile_stmt(stmt)?;
                 }
@@ -258,7 +261,7 @@ impl<'s> Compiler {
             let mut line = match opcode {
                 Opcode::Lbl(lbl) => lbl,
 
-                Opcode::Jne(lbl) => format!("    jne {lbl}"),
+                Opcode::Jmp(ki, lbl) => format!("    {ki} {lbl}"),
                 Opcode::Cmp(op1, op2) => format!("    cmp {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Lea(op1, op2) => format!("    lea {}, {}", op1.to_str(), op2.to_str()),
                 Opcode::Mov(op1, op2) => format!("    mov {}, {}", op1.to_str(), op2.to_str()),
@@ -294,6 +297,7 @@ impl<'s> Compiler {
         let mut compiler = Compiler::new();
 
         for stmt in block.stmts {
+            println!("{stmt:?}\n");
             compiler.compile_stmt(stmt)?;
         }
 
