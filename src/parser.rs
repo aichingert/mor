@@ -332,7 +332,7 @@ impl<'p, 't> Parser<'p, 't> {
             on_false = Some(self.parse_block()?);
         }
 
-        Some(Expr::If(Box::new(If { condition: Some(cond), on_true, on_false })))
+        Some(Expr::If(Box::new(If { condition: cond, on_true, on_false })))
     }
 
     pub fn parse_block(&mut self) -> Option<Block<'t>> {
@@ -355,7 +355,7 @@ impl<'p, 't> Parser<'p, 't> {
             })
         }
 
-        Some(Block { stmts })
+        Some(stmts)
     }
 }
 

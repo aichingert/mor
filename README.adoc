@@ -9,7 +9,7 @@ the mor programming language, it was created to build a compiler as a hobby and 
 
 * [ ] Yet another compiler, ast refactor
 * [ ] Fix pointer bug
-* [ ] Implement else expr
+* [x] Implement else expr
 * [ ] Implement loops
 * [ ] Come up with easy syntax
 * [ ] Maybe delete pointers as a whole because they don't add to the simplistic aspect of the language
@@ -17,4 +17,5 @@ the mor programming language, it was created to build a compiler as a hobby and 
 == Bugs:
 
 * [ ] wrong pointer dereferencing (*d = &a | a = *d)
+* [ ] if has a few bugs with && and || precedence
 * [ ] probably a few more lurking

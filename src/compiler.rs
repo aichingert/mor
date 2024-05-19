@@ -177,23 +177,51 @@ impl<'s> Compiler {
                         self.text.push(Opcode::Cdq);
                         Opcode::Div(Operand::Reg(Register::RDX))
                     }
-                    BiOpKind::CmpEq | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
-                        self.text.push(Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)));
+                    BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
+                        self.text.push(Opcode::Cmp(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
                         Opcode::Jmp(biexpr.kind.to_jmp()?, format!("i{}", self.ifs))
                     }
+                    BiOpKind::BoOr => {
+                        // TODO: maybe rework this as it seems like a huge hack
+                        let len = self.text.len();
+                        self.ifs += 1;
+
+                        if let Some(&mut Opcode::Jmp(_, ref mut lbl)) = self.text.get_mut(len - 1) {
+                            lbl.clear();
+                            lbl.push_str(&format!("i{}", self.ifs));
+                        }
+
+                        if let Some(&mut Opcode::Jmp(ref mut jmp, _)) = self.text.get_mut(len - 7) {
+                            println!("and again");
+                            let rev = match jmp.as_str() {
+                                "je"    => "jne",
+                                "jne"   => "je",
+                                "jl"    => "jge",
+                                "jle"   => "jg",
+                                "jg"    => "jle",
+                                "jge"   => "jl",
+                                _ => return Err(CompileError::new("Implement rev jmp")),
+                            };
+
+                            jmp.clear();
+                            jmp.push_str(rev);
+                        }
+                        Opcode::Lbl(format!("i{}:", self.ifs - 1))
+                    }
+                    BiOpKind::BoAnd => return Ok(()),
                     _ => todo!()
                 }
             }
             Expr::SubExpr(expr) => return self.compile_expr(*expr, flags),
             Expr::If(if_expr)   => {
-                self.compile_expr(if_expr.condition.expect("TODO: else if"), flags)?;
-                if_expr.on_true.stmts.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+                self.compile_expr(if_expr.condition, flags)?;
+                if_expr.on_true.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
                     self.text.push(Opcode::Jmp("jmp".to_string(), format!("i{}", self.ifs + 1)));
                     self.text.push(Opcode::Lbl(format!("i{}:", self.ifs)));
                     self.ifs += 1;
-                    else_branch.stmts.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+                    else_branch.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
                 }
 
                 self.ifs += 1;
@@ -268,7 +296,7 @@ impl<'s> Compiler {
     pub fn compile(block: Block<'s>) -> Result<(), CompileError> {
         let mut compiler = Compiler::new();
 
-        for stmt in block.stmts {
+        for stmt in block {
             compiler.compile_stmt(stmt)?;
         }
 

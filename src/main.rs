@@ -1,4 +1,5 @@
 mod ast;
+use ast::*;
 
 mod parser;
 use parser::*;
@@ -19,6 +20,10 @@ fn main() -> std::io::Result<()> {
 
     let source = std::fs::read_to_string(file)?;
     let block = parse(source.as_bytes()).unwrap();
+
+    for stmt in &block {
+        print(stmt, 0);
+    }
 
     Compiler::compile(block).unwrap();
 
