@@ -1,4 +1,5 @@
 use crate::Token;
+use crate::CompileError;
 
 #[derive(Debug, Clone)]
 pub enum Stmt<'s> {
@@ -86,10 +87,10 @@ pub enum BiOpKind {
     BoOr,
     BoAnd,
 
-    CmpE,
+    CmpEq,
     CmpNe,
-    CmpL,
-    CmpG,
+    CmpLt,
+    CmpGt,
     CmpLe,
     CmpGe,
 }
@@ -108,12 +109,12 @@ impl BiOpKind {
             BiOpKind::BoOr => 200,
             BiOpKind::BoAnd => 201,
 
-            BiOpKind::CmpE => 300,
+            BiOpKind::CmpEq => 300,
             BiOpKind::CmpNe => 300,
-            BiOpKind::CmpG => 300,
-            BiOpKind::CmpL => 300,
-            BiOpKind::CmpLe=> 300,
-            BiOpKind::CmpGe=> 300,
+            BiOpKind::CmpGt => 300,
+            BiOpKind::CmpLt => 300,
+            BiOpKind::CmpLe => 300,
+            BiOpKind::CmpGe => 300,
             BiOpKind::Set => 900,
         }
     }
@@ -131,13 +132,25 @@ impl BiOpKind {
             BiOpKind::BoOr => 201,
             BiOpKind::BoAnd => 202,
 
-            BiOpKind::CmpE => 301,
+            BiOpKind::CmpEq => 301,
             BiOpKind::CmpNe => 301,
-            BiOpKind::CmpG => 301,
-            BiOpKind::CmpL => 301,
-            BiOpKind::CmpLe=> 301,
-            BiOpKind::CmpGe=> 301,
+            BiOpKind::CmpGt => 301,
+            BiOpKind::CmpLt => 301,
+            BiOpKind::CmpLe => 301,
+            BiOpKind::CmpGe => 301,
             BiOpKind::Set => 901,
+        }
+    }
+
+    pub fn to_jmp(&self) -> Result<String, CompileError> {
+        match self {
+            BiOpKind::CmpEq => Ok("jne".to_string()),
+            BiOpKind::CmpNe => Ok("je".to_string()),
+            BiOpKind::CmpLt => Ok("jge".to_string()),
+            BiOpKind::CmpLe => Ok("jg".to_string()),
+            BiOpKind::CmpGt => Ok("jle".to_string()),
+            BiOpKind::CmpGe => Ok("jl".to_string()),
+            _ => Err(CompileError::new("invalid cmp for jmp"))
         }
     }
 }

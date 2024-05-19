@@ -98,7 +98,7 @@ impl std::fmt::Display for CompileError {
 }
 
 impl CompileError {
-    fn new(msg: &str) -> CompileError {
+    pub fn new(msg: &str) -> CompileError {
         CompileError { msg: msg.to_string() }
     }
 }
@@ -118,12 +118,6 @@ pub struct Compiler {
     locals: HashMap<String, i32>,
 }
 
-// SIZES
-// byte => 8 bit usigned
-// WORD => 16 bit unsigned (SWORD)
-// DWORD => 32 bit unsigned (SDWORD)
-// QWORD => 64 bit
-
 const PTR:   u16 = 0x1;
 const DEREF: u16 = 0x2;
 
@@ -137,9 +131,6 @@ impl<'s> Compiler {
             locals: HashMap::new(),
         }
     }
-
-    // nasm prog.asm -f elf64 -o prog.o
-    // gcc -no-pie prog.o
 
     fn compile_expr(&mut self, expr: Expr<'s>, mut flags: u16) -> Result<(), CompileError> {
         let opcode = match expr {
@@ -177,16 +168,6 @@ impl<'s> Compiler {
                 self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
                 self.compile_expr(a, flags)?;
 
-                // *ptr = 20;
-                //
-                // biopex {
-                //  kind = set
-                //  children = [
-                //      deref ptr,
-                //      Number(20)
-                //  ]
-                // }
-
                 match biexpr.kind {
                     BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
                     BiOpKind::Sub => Opcode::Sub(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
@@ -196,23 +177,27 @@ impl<'s> Compiler {
                         self.text.push(Opcode::Cdq);
                         Opcode::Div(Operand::Reg(Register::RDX))
                     }
-                    BiOpKind::CmpE => Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
+                    BiOpKind::CmpEq | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
+                        self.text.push(Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)));
+                        Opcode::Jmp(biexpr.kind.to_jmp()?, format!("i{}", self.ifs))
+                    }
                     _ => todo!()
                 }
             }
             Expr::SubExpr(expr) => return self.compile_expr(*expr, flags),
             Expr::If(if_expr)   => {
-                // TODO: implement else and else if
-
                 self.compile_expr(if_expr.condition.expect("TODO: else if"), flags)?;
+                if_expr.on_true.stmts.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
 
-                self.text.push(Opcode::Jmp("jne".to_string(), format!("if_{}", self.ifs)));
-                for stmt in if_expr.on_true.stmts {
-                    self.compile_stmt(stmt)?;
+                if let Some(else_branch) = if_expr.on_false {
+                    self.text.push(Opcode::Jmp("jmp".to_string(), format!("i{}", self.ifs + 1)));
+                    self.text.push(Opcode::Lbl(format!("i{}:", self.ifs)));
+                    self.ifs += 1;
+                    else_branch.stmts.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
                 }
 
                 self.ifs += 1;
-                Opcode::Lbl(format!("if_{}:", self.ifs - 1))
+                Opcode::Lbl(format!("i{}:", self.ifs - 1))
             }
         };
         self.text.push(opcode);

@@ -18,12 +18,12 @@ pub enum Token<'t> {
     Star,
     Slash,
 
-    E,
-    NE,
-    L,
-    LE,
-    G,
-    GE,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 
     Or,
     And,
@@ -43,7 +43,6 @@ pub enum Token<'t> {
     // KW
     KwIf,
     KwElse,
-    KwElIf,
 
     // types
     I08Type,
@@ -66,12 +65,12 @@ impl<'t> Token<'t> {
             Token::BiOr     => Some(BiOpKind::BoOr),
             Token::BiAnd    => Some(BiOpKind::BoAnd),
 
-            Token::E        => Some(BiOpKind::CmpE),
-            Token::NE       => Some(BiOpKind::CmpNe),
-            Token::L        => Some(BiOpKind::CmpL),
-            Token::LE       => Some(BiOpKind::CmpLe),
-            Token::G        => Some(BiOpKind::CmpG),
-            Token::GE       => Some(BiOpKind::CmpGe),
+            Token::Eq       => Some(BiOpKind::CmpEq),
+            Token::Ne       => Some(BiOpKind::CmpNe),
+            Token::Lt       => Some(BiOpKind::CmpLt),
+            Token::Le       => Some(BiOpKind::CmpLe),
+            Token::Gt       => Some(BiOpKind::CmpGt),
+            Token::Ge       => Some(BiOpKind::CmpGe),
             _ => None,
         }
     }
@@ -161,10 +160,10 @@ impl<'t> Tokenizer<'t> {
             '/' => mk_tok!(Token::Slash),
             '|' => mk_tok2!(Token::Or, b'|', Token::BiOr),
             '&' => mk_tok2!(Token::And, b'&', Token::BiAnd),
-            '>' => mk_tok2!(Token::G, b'=', Token::GE),
-            '<' => mk_tok2!(Token::L, b'=', Token::LE),
-            '=' => mk_tok2!(Token::Assign, b'=', Token::E),
-            '!' => mk_tok2!(Token::Not, b'=', Token::NE),
+            '>' => mk_tok2!(Token::Gt, b'=', Token::Ge),
+            '<' => mk_tok2!(Token::Lt, b'=', Token::Le),
+            '=' => mk_tok2!(Token::Assign, b'=', Token::Eq),
+            '!' => mk_tok2!(Token::Not, b'=', Token::Ne),
             '(' | ')' | '{' | '}' => mk_tok!(Token::Paren(at as char)),
             ',' => mk_tok!(Token::Comma),
             ';' => mk_tok!(Token::Semicolon),
@@ -191,7 +190,6 @@ impl<'t> Tokenizer<'t> {
                 // KW
                 "if"  => return Some(Token::KwIf),
                 "else"=> return Some(Token::KwElse),
-                "elif"=> return Some(Token::KwElIf),
 
                 // types
                 "i8"  => return Some(Token::I08Type),
@@ -326,8 +324,15 @@ impl<'p, 't> Parser<'p, 't> {
         let cond = self.parse_expr(0)?;
         self.expect(&Token::Paren('{'));
         let on_true = self.parse_block()?;
+        let mut on_false = None::<Block<'t>>;
 
-        Some(Expr::If(Box::new(If { condition: Some(cond), on_true, on_false: None })))
+        if self.peek(0).is_some_and(|&tok| tok == Token::KwElse) {
+            self.next().unwrap();
+            self.expect(&Token::Paren('{'));
+            on_false = Some(self.parse_block()?);
+        }
+
+        Some(Expr::If(Box::new(If { condition: Some(cond), on_true, on_false })))
     }
 
     pub fn parse_block(&mut self) -> Option<Block<'t>> {
