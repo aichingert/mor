@@ -39,15 +39,12 @@ pub enum Expr<'e> {
 
 #[derive(Debug, Clone)]
 pub struct If<'i> {
-    pub condition:  Option<Expr<'i>>,
+    pub condition:  Expr<'i>,
     pub on_true:    Block<'i>,
     pub on_false:   Option<Block<'i>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Block<'b> {
-    pub stmts: Vec<Stmt<'b>>,
-}
+pub type Block<'b> = Vec<Stmt<'b>>;
 
 #[derive(Debug, Clone)]
 pub struct Ident<'i> {
@@ -159,4 +156,55 @@ impl BiOpKind {
 pub struct BiOpEx<'b> {
     pub kind: BiOpKind,
     pub children: [Expr<'b>; 2],
+}
+
+pub fn print<'s>(stmt: &Stmt<'s>, ident: usize) {
+    let id = format!("{:01$}", ' ', ident);
+    match stmt {
+        Stmt::Expr(ex) => print_ex(ex, ident),
+        Stmt::Local(loc) => {
+            print!("{id}{}", loc.name);
+            if let Some(ex) = &loc.value {
+                println!(" = {{");
+                print_ex(ex, ident + 2);
+                println!("{id}}}");
+            } else {
+                println!();
+            }
+        }
+    }
+}
+
+pub fn print_ex<'e>(ex: &Expr<'e>, ident: usize) {
+    let id = format!("{:01$}", ' ', ident);
+    match ex {
+        Expr::Number(n) => println!("{id}{n}"),
+        Expr::Ident(Ident { value }) => println!("{id}{value}"),
+        Expr::If(ife) => {
+            println!("{id}if");
+            print_ex(&ife.condition, ident + 2);
+            println!("{id}then:");
+            ife.on_true.iter().for_each(|s| print(s, ident + 2));
+            if let Some(ref f) = ife.on_false.as_ref() {
+                println!("{id}else {{");
+                f.iter().for_each(|s| print(s, ident + 2));
+                println!("{id}}}");
+            }
+        }
+        Expr::SubExpr(sub) => print_ex(&sub, ident),
+        Expr::BiOp(bi) => {
+            let [a, b] = &bi.children;
+            println!("{id}{{");
+            println!("{id}    kind: {:?}", bi.kind);
+            print_ex(&a, ident + 2);
+            print_ex(&b, ident + 2);
+            println!("{id}}}");
+        }
+        Expr::UnOp(un) => {
+            println!("{id}{{");
+            println!("{id}    kind: {:?}", un.kind);
+            print_ex(&un.child, ident + 2);
+            println!("{id}}}");
+        }
+    }
 }
