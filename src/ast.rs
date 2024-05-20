@@ -30,6 +30,7 @@ pub enum Expr<'e> {
     Number  (&'e str),
     Ident   (Ident<'e>),
     If      (Box<If<'e>>),
+    While   (Box<While<'e>>),
 
     SubExpr (Box<Expr<'e>>),
 
@@ -42,6 +43,12 @@ pub struct If<'i> {
     pub condition:  Expr<'i>,
     pub on_true:    Block<'i>,
     pub on_false:   Option<Block<'i>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct While<'w> {
+    pub condition:  Expr<'w>,
+    pub body:       Block<'w>,
 }
 
 pub type Block<'b> = Vec<Stmt<'b>>;
@@ -95,6 +102,7 @@ pub enum BiOpKind {
 impl BiOpKind {
     pub fn lprec(&self) -> u16 {
         match self {
+            BiOpKind::Set => 99,
             BiOpKind::Add => 100,
             BiOpKind::Sub => 100,
             BiOpKind::Mul => 200,
@@ -112,12 +120,12 @@ impl BiOpKind {
             BiOpKind::CmpLt => 300,
             BiOpKind::CmpLe => 300,
             BiOpKind::CmpGe => 300,
-            BiOpKind::Set => 900,
         }
     }
     
     pub fn rprec(&self) -> u16 {
         match self {
+            BiOpKind::Set => 100,
             BiOpKind::Add => 101,
             BiOpKind::Sub => 101,
             BiOpKind::Mul => 201,
@@ -135,7 +143,6 @@ impl BiOpKind {
             BiOpKind::CmpLt => 301,
             BiOpKind::CmpLe => 301,
             BiOpKind::CmpGe => 301,
-            BiOpKind::Set => 901,
         }
     }
 
@@ -190,6 +197,13 @@ pub fn print_ex<'e>(ex: &Expr<'e>, ident: usize) {
                 f.iter().for_each(|s| print(s, ident + 2));
                 println!("{id}}}");
             }
+        }
+        Expr::While(whl) => {
+            println!("{id}while");
+            print_ex(&whl.condition, ident + 2);
+            println!("{id}{{");
+            whl.body.iter().for_each(|s| print(s, ident + 2));
+            println!("{id}}}");
         }
         Expr::SubExpr(sub) => print_ex(&sub, ident),
         Expr::BiOp(bi) => {

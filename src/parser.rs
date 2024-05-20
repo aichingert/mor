@@ -43,6 +43,7 @@ pub enum Token<'t> {
     // KW
     KwIf,
     KwElse,
+    KwWhile,
 
     // types
     I08Type,
@@ -190,6 +191,7 @@ impl<'t> Tokenizer<'t> {
                 // KW
                 "if"  => return Some(Token::KwIf),
                 "else"=> return Some(Token::KwElse),
+                "while" => return Some(Token::KwWhile),
 
                 // types
                 "i8"  => return Some(Token::I08Type),
@@ -272,6 +274,10 @@ impl<'p, 't> Parser<'p, 't> {
             return self.parse_if();
         }
 
+        if Token::KwWhile == tok {
+            return self.parse_while();
+        }
+
         None
     }
 
@@ -333,6 +339,14 @@ impl<'p, 't> Parser<'p, 't> {
         }
 
         Some(Expr::If(Box::new(If { condition: cond, on_true, on_false })))
+    }
+
+    pub fn parse_while(&mut self) -> Option<Expr<'t>> {
+        let cond = self.parse_expr(0)?;
+        self.expect(&Token::Paren('{'));
+        let body = self.parse_block()?;
+
+        Some(Expr::While(Box::new(While { condition: cond, body })))
     }
 
     pub fn parse_block(&mut self) -> Option<Block<'t>> {

@@ -10,12 +10,13 @@ the mor programming language, it was created to build a compiler as a hobby and 
 * [ ] Yet another compiler, ast refactor
 * [ ] Fix pointer bug
 * [x] Implement else expr
-* [ ] Implement loops
+* [x] Implement loops
 * [ ] Come up with easy syntax
 * [ ] Maybe delete pointers as a whole because they don't add to the simplistic aspect of the language
 
 == Bugs:
 
-* [ ] wrong pointer dereferencing (*d = &a | a = *d)
+* [ ] wrong pointer dereferencing (*d = &a | a = *d), they are currently disabled since they cause too many bugs at the moment
 * [ ] if has a few bugs with && and || precedence
+* [ ] when there is an if or another loop inside a loop then the labels will get messed up resulting in infinite loops
 * [ ] probably a few more lurking

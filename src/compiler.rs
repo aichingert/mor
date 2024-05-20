@@ -112,7 +112,7 @@ impl std::error::Error for CompileError {
 #[derive(Debug)]
 pub struct Compiler {
     rsp: i32,
-    ifs: i32, 
+    lbl: i32,
 
     text: Vec<Opcode>, // section
     locals: HashMap<String, i32>,
@@ -125,7 +125,7 @@ impl<'s> Compiler {
     fn new() -> Self {
         Self { 
             rsp: 0, 
-            ifs: 0,
+            lbl: 0,
 
             text: Vec::new(),
             locals: HashMap::new(),
@@ -139,11 +139,16 @@ impl<'s> Compiler {
                 let Some(offset) = self.locals.get(value) else { return Err(CompileError::new("Ident: not found")); };
                 let (mut op1, mut op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
 
+                // lea rcx, qword [rsp]
+                // mov 
+
                 // TODO: fix wrong deref in the second case -> *d = &a | a = *d
+                /*
                 if flags & DEREF == DEREF {
                     self.text.push(Opcode::Lea(Operand::Reg(Register::RCX), op2));
                     (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RCX, 0));
                 }
+                */
 
                 match flags & PTR == PTR {
                     true  => { Opcode::Lea(op1, op2) },
@@ -164,7 +169,7 @@ impl<'s> Compiler {
             Expr::BiOp(biexpr) => {
                 let [a, b] = biexpr.children;
                 if biexpr.kind == BiOpKind::Set { flags |= PTR; }
-                self.compile_expr(b, flags)?;
+                self.compile_expr(b, 0)?;
                 self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
                 self.compile_expr(a, flags)?;
 
@@ -179,16 +184,17 @@ impl<'s> Compiler {
                     }
                     BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
                         self.text.push(Opcode::Cmp(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
-                        Opcode::Jmp(biexpr.kind.to_jmp()?, format!("i{}", self.ifs))
+                        Opcode::Jmp(biexpr.kind.to_jmp()?, format!("l{}", self.lbl))
                     }
                     BiOpKind::BoOr => {
                         // TODO: maybe rework this as it seems like a huge hack
+                        // TODO: this is not only a huge hack but also immensly broken
                         let len = self.text.len();
-                        self.ifs += 1;
+                        self.lbl += 1;
 
                         if let Some(&mut Opcode::Jmp(_, ref mut lbl)) = self.text.get_mut(len - 1) {
                             lbl.clear();
-                            lbl.push_str(&format!("i{}", self.ifs));
+                            lbl.push_str(&format!("l{}", self.lbl));
                         }
 
                         if let Some(&mut Opcode::Jmp(ref mut jmp, _)) = self.text.get_mut(len - 7) {
@@ -196,17 +202,17 @@ impl<'s> Compiler {
                             let rev = match jmp.as_str() {
                                 "je"    => "jne",
                                 "jne"   => "je",
-                                "jl"    => "jge",
-                                "jle"   => "jg",
-                                "jg"    => "jle",
-                                "jge"   => "jl",
+                                "jl"    => "jg",
+                                "jle"   => "jge",
+                                "jg"    => "jl",
+                                "jge"   => "jle",
                                 _ => return Err(CompileError::new("Implement rev jmp")),
                             };
 
                             jmp.clear();
                             jmp.push_str(rev);
                         }
-                        Opcode::Lbl(format!("i{}:", self.ifs - 1))
+                        Opcode::Lbl(format!("l{}:", self.lbl - 1))
                     }
                     BiOpKind::BoAnd => return Ok(()),
                     _ => todo!()
@@ -218,14 +224,38 @@ impl<'s> Compiler {
                 if_expr.on_true.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
-                    self.text.push(Opcode::Jmp("jmp".to_string(), format!("i{}", self.ifs + 1)));
-                    self.text.push(Opcode::Lbl(format!("i{}:", self.ifs)));
-                    self.ifs += 1;
+                    self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", self.lbl + 1)));
+                    self.text.push(Opcode::Lbl(format!("l{}:", self.lbl)));
+                    self.lbl += 1;
                     else_branch.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
                 }
 
-                self.ifs += 1;
-                Opcode::Lbl(format!("i{}:", self.ifs - 1))
+                self.lbl += 1;
+                Opcode::Lbl(format!("l{}:", self.lbl - 1))
+            }
+            Expr::While(while_expr) => {
+                self.text.push(Opcode::Lbl(format!("l{}:", self.lbl)));
+                self.lbl += 1;
+                self.compile_expr(while_expr.condition, flags)?;
+                let len = self.text.len();
+                if let Some(&mut Opcode::Jmp(ref mut jmp, _)) = self.text.get_mut(len - 1) {
+                    let rev = match jmp.as_str() {
+                        "je"    => "jne",
+                        "jne"   => "je",
+                        "jl"    => "jg",
+                        "jle"   => "jge",
+                        "jg"    => "jl",
+                        "jge"   => "jle",
+                        _ => return Err(CompileError::new("Implement rev jmp")),
+                    };
+
+                    jmp.clear();
+                    jmp.push_str(rev);
+                }
+                while_expr.body.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+                self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", self.lbl - 1)));
+                self.lbl += 1;
+                Opcode::Lbl(format!("l{}:", self.lbl - 1))
             }
         };
         self.text.push(opcode);
