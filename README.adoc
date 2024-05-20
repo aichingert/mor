@@ -7,7 +7,7 @@ the mor programming language, it was created to build a compiler as a hobby and 
 
 == TODOs:
 
-* [ ] Yet another compiler, ast refactor
+* [~] Yet another compiler and ast refactor
 * [ ] Fix pointer bug
 * [x] Implement else expr
 * [x] Implement loops

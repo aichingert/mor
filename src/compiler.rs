@@ -118,8 +118,9 @@ pub struct Compiler {
     locals: HashMap<String, i32>,
 }
 
-const PTR:   u16 = 0x1;
-const DEREF: u16 = 0x2;
+pub const SET:   u16 = 0b1;
+pub const IF:    u16 = 0b10;
+pub const WHILE: u16 = 0b100;
 
 impl<'s> Compiler {
     fn new() -> Self {
@@ -132,46 +133,31 @@ impl<'s> Compiler {
         }
     }
 
-    fn compile_expr(&mut self, expr: Expr<'s>, mut flags: u16) -> Result<(), CompileError> {
+    fn compile_expr(&mut self, expr: Expr<'s>, flags: u16) -> Result<(), CompileError> {
         let opcode = match expr {
             Expr::Number(num) => Opcode::Mov(Operand::Reg(Register::RAX), Operand::Immediate(num.parse().map_err(|_| CompileError::new("Number too big"))?)),
             Expr::Ident(Ident { value }) => {
                 let Some(offset) = self.locals.get(value) else { return Err(CompileError::new("Ident: not found")); };
-                let (mut op1, mut op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
+                let (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
 
-                // lea rcx, qword [rsp]
-                // mov 
-
-                // TODO: fix wrong deref in the second case -> *d = &a | a = *d
-                /*
-                if flags & DEREF == DEREF {
-                    self.text.push(Opcode::Lea(Operand::Reg(Register::RCX), op2));
-                    (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RCX, 0));
-                }
-                */
-
-                match flags & PTR == PTR {
+                match flags & SET == SET {
                     true  => { Opcode::Lea(op1, op2) },
                     false => { Opcode::Mov(op1, op2) }
                 }
             }
             Expr::UnOp(unexpr) => {
-                let child = unexpr.child;
-                flags |= unexpr.kind as u16;
-                self.compile_expr(child, flags)?;
+                self.compile_expr(unexpr.child, 0)?;
 
                 match unexpr.kind {
                     UnOpKind::Neg => Opcode::Neg(Operand::Reg(Register::RAX)),
                     UnOpKind::Not => Opcode::Not(Operand::Reg(Register::RAX)),
-                    UnOpKind::Ref | UnOpKind::Deref => return Ok(()),
                 }
             }
             Expr::BiOp(biexpr) => {
                 let [a, b] = biexpr.children;
-                if biexpr.kind == BiOpKind::Set { flags |= PTR; }
                 self.compile_expr(b, 0)?;
                 self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
-                self.compile_expr(a, flags)?;
+                self.compile_expr(a, if biexpr.kind == BiOpKind::Set { SET } else { 0 })?;
 
                 match biexpr.kind {
                     BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
@@ -183,44 +169,17 @@ impl<'s> Compiler {
                         Opcode::Div(Operand::Reg(Register::RDX))
                     }
                     BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
-                        self.text.push(Opcode::Cmp(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
-                        Opcode::Jmp(biexpr.kind.to_jmp()?, format!("l{}", self.lbl))
-                    }
-                    BiOpKind::BoOr => {
-                        // TODO: maybe rework this as it seems like a huge hack
-                        // TODO: this is not only a huge hack but also immensly broken
-                        let len = self.text.len();
-                        self.lbl += 1;
-
-                        if let Some(&mut Opcode::Jmp(_, ref mut lbl)) = self.text.get_mut(len - 1) {
-                            lbl.clear();
-                            lbl.push_str(&format!("l{}", self.lbl));
-                        }
-
-                        if let Some(&mut Opcode::Jmp(ref mut jmp, _)) = self.text.get_mut(len - 7) {
-                            println!("and again");
-                            let rev = match jmp.as_str() {
-                                "je"    => "jne",
-                                "jne"   => "je",
-                                "jl"    => "jg",
-                                "jle"   => "jge",
-                                "jg"    => "jl",
-                                "jge"   => "jle",
-                                _ => return Err(CompileError::new("Implement rev jmp")),
-                            };
-
-                            jmp.clear();
-                            jmp.push_str(rev);
-                        }
-                        Opcode::Lbl(format!("l{}:", self.lbl - 1))
+                        self.text.push(Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)));
+                        Opcode::Jmp(biexpr.kind.to_jmp(flags)?, format!("l{}", self.lbl))
                     }
                     BiOpKind::BoAnd => return Ok(()),
-                    _ => todo!()
+                    _ => todo!(),
                 }
             }
-            Expr::SubExpr(expr) => return self.compile_expr(*expr, flags),
+            Expr::SubExpr(expr) => return self.compile_expr(*expr, 0),
             Expr::If(if_expr)   => {
-                self.compile_expr(if_expr.condition, flags)?;
+                self.lbl += 1;
+                self.compile_expr(if_expr.condition, IF)?;
                 if_expr.on_true.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
@@ -234,18 +193,19 @@ impl<'s> Compiler {
                 Opcode::Lbl(format!("l{}:", self.lbl - 1))
             }
             Expr::While(while_expr) => {
-                self.text.push(Opcode::Lbl(format!("l{}:", self.lbl)));
+                let lbl = self.lbl;
+                self.text.push(Opcode::Lbl(format!("l{}:", lbl)));
                 self.lbl += 1;
-                self.compile_expr(while_expr.condition, flags)?;
+                self.compile_expr(while_expr.condition, WHILE)?;
                 let len = self.text.len();
                 if let Some(&mut Opcode::Jmp(ref mut jmp, _)) = self.text.get_mut(len - 1) {
                     let rev = match jmp.as_str() {
                         "je"    => "jne",
                         "jne"   => "je",
-                        "jl"    => "jg",
-                        "jle"   => "jge",
-                        "jg"    => "jl",
-                        "jge"   => "jle",
+                        "jl"    => "jge",
+                        "jle"   => "jg",
+                        "jg"    => "jle",
+                        "jge"   => "jl",
                         _ => return Err(CompileError::new("Implement rev jmp")),
                     };
 
@@ -253,9 +213,9 @@ impl<'s> Compiler {
                     jmp.push_str(rev);
                 }
                 while_expr.body.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
-                self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", self.lbl - 1)));
+                self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", lbl)));
                 self.lbl += 1;
-                Opcode::Lbl(format!("l{}:", self.lbl - 1))
+                Opcode::Lbl(format!("l{}:", lbl + 1))
             }
         };
         self.text.push(opcode);

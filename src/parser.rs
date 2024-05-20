@@ -80,8 +80,6 @@ impl<'t> Token<'t> {
         match self {
             Token::Not   => Some(UnOpKind::Not),
             Token::Minus => Some(UnOpKind::Neg),
-            Token::And   => Some(UnOpKind::Ref),
-            Token::Star  => Some(UnOpKind::Deref),
             _ => None,
         }
     }
@@ -246,43 +244,34 @@ impl<'p, 't> Parser<'p, 't> {
         panic!("expected identifier");
     }
 
-    fn parse_leading_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
+    fn parse_leading_expr(&mut self) -> Option<Expr<'t>> {
         let tok = *self.next()?;
 
-        if let Token::Ident(id) = tok {
-            return Some(Expr::Ident(Ident::new(id)));
-        }
-        
-        if let Token::Number(n) = tok {
-            return Some(Expr::Number(n));
-        }
-
-        if Token::Paren('(') == tok {
-            let expr = self.parse_expr(0)?;
-            self.expect(&Token::Paren(')'));
-            return Some(Expr::SubExpr(Box::new(expr)));
+        match tok {
+            Token::Ident(id) => return Some(Expr::Ident(Ident::new(id))),
+            Token::Number(n) => return Some(Expr::Number(n)),
+            Token::KwIf      => return self.parse_if(),
+            Token::KwWhile   => return self.parse_while(),
+            Token::Paren('(') => {
+                let expr = self.parse_expr(0)?;
+                self.expect(&Token::Paren(')'));
+                return Some(Expr::SubExpr(Box::new(expr)));
+            }
+            _ => (),
         }
 
         if let Some(unop) = tok.try_unop() {
             return Some(Expr::UnOp(Box::new(UnOpEx {
                 kind: unop,
-                child: self.parse_leading_expr(1000)?,
+                child: self.parse_leading_expr()?,
             })));
-        }
-
-        if Token::KwIf == tok {
-            return self.parse_if();
-        }
-
-        if Token::KwWhile == tok {
-            return self.parse_while();
         }
 
         None
     }
 
     fn parse_expr(&mut self, prec: u16) -> Option<Expr<'t>> {
-        let mut res = self.parse_leading_expr(prec)?;
+        let mut res = self.parse_leading_expr()?;
 
         loop {
             let Some(cur) = self.peek(0) else { break; };
@@ -308,13 +297,6 @@ impl<'p, 't> Parser<'p, 't> {
 
     fn parse_var(&mut self) -> Option<Local<'t>> {
         let typ = self.next().copied();
-        let mut is_ptr = false;
-
-        if &Token::Star == self.peek(0)? {
-            self.next().unwrap();
-            is_ptr = true;
-        }
-
         let name = self.expect_ident();
 
         let mut value = None;
@@ -323,7 +305,7 @@ impl<'p, 't> Parser<'p, 't> {
             value = Some(self.parse_expr(0)?);
         }
 
-        Some(Local::new(name, is_ptr, typ, value))
+        Some(Local::new(name, typ, value))
     }
 
     pub fn parse_if(&mut self) -> Option<Expr<'t>> {
@@ -353,13 +335,12 @@ impl<'p, 't> Parser<'p, 't> {
         let mut stmts = Vec::new();
 
         while let Some(&at) = self.peek(0) {
-            if Token::Semicolon == at {
-                self.next().unwrap();
-                continue;
-            }
-            if Token::Paren('}') == at {
-                self.next().unwrap();
-                break;
+            match at {
+                Token::Semicolon | Token::Paren('}') => {
+                    self.next().unwrap();
+                    if at == Token::Semicolon { continue; } else { break; }
+                }
+                _ => (),
             }
 
             stmts.push(if at.try_type().is_some() {

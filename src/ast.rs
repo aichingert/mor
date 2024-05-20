@@ -3,25 +3,22 @@ use crate::CompileError;
 
 #[derive(Debug, Clone)]
 pub enum Stmt<'s> {
-    Expr    (Expr<'s>),
     Local   (Local<'s>),
+    Expr    (Expr<'s>),
 }
 
 #[derive(Debug, Clone)]
 pub struct Local<'l> {
     pub name: &'l str,
-
     // TODO: support => auto x = Expr; 
-    pub is_ptr: bool,
     pub typ: Option<Token<'l>>,
-
     // Option to support => i8 x;
     pub value: Option<Expr<'l>>,
 }
 
 impl<'l> Local<'l> {
-    pub fn new(name: &'l str, is_ptr: bool, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
-        Self { name, is_ptr, typ, value }
+    pub fn new(name: &'l str, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
+        Self { name, typ, value }
     }
 }
 
@@ -66,8 +63,6 @@ impl<'i> Ident<'i> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnOpKind {
-    Ref = 1,
-    Deref = 2,
     Not,
     Neg,
 }
@@ -80,11 +75,11 @@ pub struct UnOpEx<'u> {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BiOpKind {
+    Set = 1,
     Add,
     Sub,
     Mul,
     Div,
-    Set,
 
     BiOr,
     BiAnd,
@@ -102,7 +97,7 @@ pub enum BiOpKind {
 impl BiOpKind {
     pub fn lprec(&self) -> u16 {
         match self {
-            BiOpKind::Set => 99,
+            BiOpKind::Set => 10,
             BiOpKind::Add => 100,
             BiOpKind::Sub => 100,
             BiOpKind::Mul => 200,
@@ -125,7 +120,7 @@ impl BiOpKind {
     
     pub fn rprec(&self) -> u16 {
         match self {
-            BiOpKind::Set => 100,
+            BiOpKind::Set => 11,
             BiOpKind::Add => 101,
             BiOpKind::Sub => 101,
             BiOpKind::Mul => 201,
@@ -146,14 +141,20 @@ impl BiOpKind {
         }
     }
 
-    pub fn to_jmp(&self) -> Result<String, CompileError> {
-        match self {
-            BiOpKind::CmpEq => Ok("jne".to_string()),
-            BiOpKind::CmpNe => Ok("je".to_string()),
-            BiOpKind::CmpLt => Ok("jge".to_string()),
-            BiOpKind::CmpLe => Ok("jg".to_string()),
-            BiOpKind::CmpGt => Ok("jle".to_string()),
-            BiOpKind::CmpGe => Ok("jl".to_string()),
+    pub fn to_jmp(&self, flag: u16) -> Result<String, CompileError> {
+        match (flag, self) {
+            (super::WHILE, BiOpKind::CmpEq) => Ok("je".to_string()),
+            (super::WHILE, BiOpKind::CmpNe) => Ok("jne".to_string()),
+            (super::WHILE, BiOpKind::CmpLt) => Ok("jl".to_string()),
+            (super::WHILE, BiOpKind::CmpLe) => Ok("jle".to_string()),
+            (super::WHILE, BiOpKind::CmpGt) => Ok("jg".to_string()),
+            (super::WHILE, BiOpKind::CmpGe) => Ok("jge".to_string()),
+            (super::IF, BiOpKind::CmpEq) => Ok("jne".to_string()),
+            (super::IF, BiOpKind::CmpNe) => Ok("je".to_string()),
+            (super::IF, BiOpKind::CmpLt) => Ok("jle".to_string()),
+            (super::IF, BiOpKind::CmpLe) => Ok("jl".to_string()),
+            (super::IF, BiOpKind::CmpGt) => Ok("jge".to_string()),
+            (super::IF, BiOpKind::CmpGe) => Ok("jg".to_string()),
             _ => Err(CompileError::new("invalid cmp for jmp"))
         }
     }
@@ -209,14 +210,14 @@ pub fn print_ex<'e>(ex: &Expr<'e>, ident: usize) {
         Expr::BiOp(bi) => {
             let [a, b] = &bi.children;
             println!("{id}{{");
-            println!("{id}    kind: {:?}", bi.kind);
+            println!("{id} kind: {:?}", bi.kind);
             print_ex(&a, ident + 2);
             print_ex(&b, ident + 2);
             println!("{id}}}");
         }
         Expr::UnOp(un) => {
             println!("{id}{{");
-            println!("{id}    kind: {:?}", un.kind);
+            println!("{id}  kind: {:?}", un.kind);
             print_ex(&un.child, ident + 2);
             println!("{id}}}");
         }
