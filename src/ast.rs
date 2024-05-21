@@ -75,11 +75,11 @@ pub struct UnOpEx<'u> {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BiOpKind {
-    Set = 1,
     Add,
     Sub,
     Mul,
     Div,
+    Set,
 
     BiOr,
     BiAnd,
@@ -141,20 +141,14 @@ impl BiOpKind {
         }
     }
 
-    pub fn to_jmp(&self, flag: u16) -> Result<String, CompileError> {
-        match (flag, self) {
-            (super::WHILE, BiOpKind::CmpEq) => Ok("je".to_string()),
-            (super::WHILE, BiOpKind::CmpNe) => Ok("jne".to_string()),
-            (super::WHILE, BiOpKind::CmpLt) => Ok("jl".to_string()),
-            (super::WHILE, BiOpKind::CmpLe) => Ok("jle".to_string()),
-            (super::WHILE, BiOpKind::CmpGt) => Ok("jg".to_string()),
-            (super::WHILE, BiOpKind::CmpGe) => Ok("jge".to_string()),
-            (super::IF, BiOpKind::CmpEq) => Ok("jne".to_string()),
-            (super::IF, BiOpKind::CmpNe) => Ok("je".to_string()),
-            (super::IF, BiOpKind::CmpLt) => Ok("jle".to_string()),
-            (super::IF, BiOpKind::CmpLe) => Ok("jl".to_string()),
-            (super::IF, BiOpKind::CmpGt) => Ok("jge".to_string()),
-            (super::IF, BiOpKind::CmpGe) => Ok("jg".to_string()),
+    pub fn to_jmp(&self) -> Result<String, CompileError> {
+        match self {
+            BiOpKind::CmpEq => Ok("jne".to_string()),
+            BiOpKind::CmpNe => Ok("je".to_string()),
+            BiOpKind::CmpLt => Ok("jge".to_string()),
+            BiOpKind::CmpLe => Ok("jg".to_string()),
+            BiOpKind::CmpGt => Ok("jle".to_string()),
+            BiOpKind::CmpGe => Ok("jl".to_string()),
             _ => Err(CompileError::new("invalid cmp for jmp"))
         }
     }

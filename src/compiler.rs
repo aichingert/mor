@@ -170,7 +170,7 @@ impl<'s> Compiler {
                     }
                     BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
                         self.text.push(Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)));
-                        Opcode::Jmp(biexpr.kind.to_jmp(flags)?, format!("l{}", self.lbl))
+                        Opcode::Jmp(biexpr.kind.to_jmp()?, format!("l{}", self.lbl))
                     }
                     BiOpKind::BoAnd => return Ok(()),
                     _ => todo!(),
@@ -179,7 +179,7 @@ impl<'s> Compiler {
             Expr::SubExpr(expr) => return self.compile_expr(*expr, 0),
             Expr::If(if_expr)   => {
                 self.lbl += 1;
-                self.compile_expr(if_expr.condition, IF)?;
+                self.compile_expr(if_expr.condition, 0)?;
                 if_expr.on_true.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
@@ -195,26 +195,14 @@ impl<'s> Compiler {
             Expr::While(while_expr) => {
                 let lbl = self.lbl;
                 self.text.push(Opcode::Lbl(format!("l{}:", lbl)));
-                self.lbl += 1;
-                self.compile_expr(while_expr.condition, WHILE)?;
-                let len = self.text.len();
-                if let Some(&mut Opcode::Jmp(ref mut jmp, _)) = self.text.get_mut(len - 1) {
-                    let rev = match jmp.as_str() {
-                        "je"    => "jne",
-                        "jne"   => "je",
-                        "jl"    => "jge",
-                        "jle"   => "jg",
-                        "jg"    => "jle",
-                        "jge"   => "jl",
-                        _ => return Err(CompileError::new("Implement rev jmp")),
-                    };
 
-                    jmp.clear();
-                    jmp.push_str(rev);
-                }
-                while_expr.body.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
-                self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", lbl)));
                 self.lbl += 1;
+                self.compile_expr(while_expr.condition, 0)?;
+
+                self.lbl += 1;
+                while_expr.body.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+
+                self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", lbl)));
                 Opcode::Lbl(format!("l{}:", lbl + 1))
             }
         };
