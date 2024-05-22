@@ -23,6 +23,7 @@ fn main() -> std::io::Result<()> {
 
     for stmt in &block {
         print(stmt, 0);
+        println!("=====");
     }
 
     Compiler::compile(block).unwrap();
