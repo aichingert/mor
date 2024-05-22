@@ -55,30 +55,30 @@ pub enum Token<'t> {
 impl<'t> Token<'t> {
     fn try_biop(&self) -> Option<BiOpKind> {
         match self {
-            Token::Plus     => Some(BiOpKind::Add),
-            Token::Minus    => Some(BiOpKind::Sub),
-            Token::Star     => Some(BiOpKind::Mul),
-            Token::Slash    => Some(BiOpKind::Div),
-            Token::Assign   => Some(BiOpKind::Set),
+            Token::Plus => Some(BiOpKind::Add),
+            Token::Minus => Some(BiOpKind::Sub),
+            Token::Star => Some(BiOpKind::Mul),
+            Token::Slash => Some(BiOpKind::Div),
+            Token::Assign => Some(BiOpKind::Set),
 
-            Token::Or       => Some(BiOpKind::BiOr),
-            Token::And      => Some(BiOpKind::BiAnd),
-            Token::BiOr     => Some(BiOpKind::BoOr),
-            Token::BiAnd    => Some(BiOpKind::BoAnd),
+            Token::Or => Some(BiOpKind::BiOr),
+            Token::And => Some(BiOpKind::BiAnd),
+            Token::BiOr => Some(BiOpKind::BoOr),
+            Token::BiAnd => Some(BiOpKind::BoAnd),
 
-            Token::Eq       => Some(BiOpKind::CmpEq),
-            Token::Ne       => Some(BiOpKind::CmpNe),
-            Token::Lt       => Some(BiOpKind::CmpLt),
-            Token::Le       => Some(BiOpKind::CmpLe),
-            Token::Gt       => Some(BiOpKind::CmpGt),
-            Token::Ge       => Some(BiOpKind::CmpGe),
+            Token::Eq => Some(BiOpKind::CmpEq),
+            Token::Ne => Some(BiOpKind::CmpNe),
+            Token::Lt => Some(BiOpKind::CmpLt),
+            Token::Le => Some(BiOpKind::CmpLe),
+            Token::Gt => Some(BiOpKind::CmpGt),
+            Token::Ge => Some(BiOpKind::CmpGe),
             _ => None,
         }
     }
 
     fn try_unop(&self) -> Option<UnOpKind> {
         match self {
-            Token::Not   => Some(UnOpKind::Not),
+            Token::Not => Some(UnOpKind::Not),
             Token::Minus => Some(UnOpKind::Neg),
             _ => None,
         }
@@ -99,7 +99,7 @@ impl<'t> Tokenizer<'t> {
         tokenizer.tokens
     }
 
-    fn new(source: &'t[u8]) -> Self {
+    fn new(source: &'t [u8]) -> Self {
         Self {
             source,
             cursor: 0,
@@ -187,12 +187,12 @@ impl<'t> Tokenizer<'t> {
 
             match value {
                 // KW
-                "if"  => return Some(Token::KwIf),
-                "else"=> return Some(Token::KwElse),
+                "if" => return Some(Token::KwIf),
+                "else" => return Some(Token::KwElse),
                 "while" => return Some(Token::KwWhile),
 
                 // types
-                "i8"  => return Some(Token::I08Type),
+                "i8" => return Some(Token::I08Type),
                 "i16" => return Some(Token::I16Type),
                 "i32" => return Some(Token::I32Type),
                 "i64" => return Some(Token::I64Type),
@@ -205,7 +205,6 @@ impl<'t> Tokenizer<'t> {
         self.consume_ch(1);
         None
     }
-
 }
 
 pub struct Parser<'p, 't> {
@@ -229,7 +228,9 @@ impl<'p, 't> Parser<'p, 't> {
 
     fn expect(&mut self, token: &Token<'t>) {
         if let Some(tok) = self.next() {
-            if tok == token { return; }
+            if tok == token {
+                return;
+            }
             panic!("expected token of type: {token:?} but found {tok:?}!");
         }
 
@@ -250,8 +251,8 @@ impl<'p, 't> Parser<'p, 't> {
         match tok {
             Token::Ident(id) => return Some(Expr::Ident(Ident::new(id))),
             Token::Number(n) => return Some(Expr::Number(n)),
-            Token::KwIf      => return self.parse_if(),
-            Token::KwWhile   => return self.parse_while(),
+            Token::KwIf => return self.parse_if(),
+            Token::KwWhile => return self.parse_while(),
             Token::Paren('(') => {
                 let expr = self.parse_expr(0)?;
                 self.expect(&Token::Paren(')'));
@@ -274,7 +275,9 @@ impl<'p, 't> Parser<'p, 't> {
         let mut res = self.parse_leading_expr()?;
 
         loop {
-            let Some(cur) = self.peek(0) else { break; };
+            let Some(cur) = self.peek(0) else {
+                break;
+            };
 
             if let Some(biop) = cur.try_biop() {
                 if biop.lprec() >= prec {
@@ -320,7 +323,11 @@ impl<'p, 't> Parser<'p, 't> {
             on_false = Some(self.parse_block()?);
         }
 
-        Some(Expr::If(Box::new(If { condition: cond, on_true, on_false })))
+        Some(Expr::If(Box::new(If {
+            condition: cond,
+            on_true,
+            on_false,
+        })))
     }
 
     pub fn parse_while(&mut self) -> Option<Expr<'t>> {
@@ -328,7 +335,10 @@ impl<'p, 't> Parser<'p, 't> {
         self.expect(&Token::Paren('{'));
         let body = self.parse_block()?;
 
-        Some(Expr::While(Box::new(While { condition: cond, body })))
+        Some(Expr::While(Box::new(While {
+            condition: cond,
+            body,
+        })))
     }
 
     pub fn parse_block(&mut self) -> Option<Block<'t>> {
@@ -338,7 +348,11 @@ impl<'p, 't> Parser<'p, 't> {
             match at {
                 Token::Semicolon | Token::Paren('}') => {
                     self.next().unwrap();
-                    if at == Token::Semicolon { continue; } else { break; }
+                    if at == Token::Semicolon {
+                        continue;
+                    } else {
+                        break;
+                    }
                 }
                 _ => (),
             }
@@ -354,7 +368,7 @@ impl<'p, 't> Parser<'p, 't> {
     }
 }
 
-pub fn parse<'p>(source: &'p [u8]) -> Option<Block<'p>> {
+pub fn parse(source: &[u8]) -> Option<Block<'_>> {
     let tokens = Tokenizer::tokenize(source);
     let mut p = Parser::new(&tokens);
     p.parse_block()

@@ -1,16 +1,16 @@
-use crate::Token;
 use crate::CompileError;
+use crate::Token;
 
 #[derive(Debug, Clone)]
 pub enum Stmt<'s> {
-    Local   (Local<'s>),
-    Expr    (Expr<'s>),
+    Local(Local<'s>),
+    Expr(Expr<'s>),
 }
 
 #[derive(Debug, Clone)]
 pub struct Local<'l> {
     pub name: &'l str,
-    // TODO: support => auto x = Expr; 
+    // TODO: support => auto x = Expr;
     pub typ: Option<Token<'l>>,
     // Option to support => i8 x;
     pub value: Option<Expr<'l>>,
@@ -24,28 +24,28 @@ impl<'l> Local<'l> {
 
 #[derive(Debug, Clone)]
 pub enum Expr<'e> {
-    Number  (&'e str),
-    Ident   (Ident<'e>),
-    If      (Box<If<'e>>),
-    While   (Box<While<'e>>),
+    Number(&'e str),
+    Ident(Ident<'e>),
+    If(Box<If<'e>>),
+    While(Box<While<'e>>),
 
-    SubExpr (Box<Expr<'e>>),
+    SubExpr(Box<Expr<'e>>),
 
-    UnOp    (Box<UnOpEx<'e>>),
-    BiOp    (Box<BiOpEx<'e>>),
+    UnOp(Box<UnOpEx<'e>>),
+    BiOp(Box<BiOpEx<'e>>),
 }
 
 #[derive(Debug, Clone)]
 pub struct If<'i> {
-    pub condition:  Expr<'i>,
-    pub on_true:    Block<'i>,
-    pub on_false:   Option<Block<'i>>,
+    pub condition: Expr<'i>,
+    pub on_true: Block<'i>,
+    pub on_false: Option<Block<'i>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct While<'w> {
-    pub condition:  Expr<'w>,
-    pub body:       Block<'w>,
+    pub condition: Expr<'w>,
+    pub body: Block<'w>,
 }
 
 pub type Block<'b> = Vec<Stmt<'b>>;
@@ -117,7 +117,7 @@ impl BiOpKind {
             BiOpKind::CmpGe => 300,
         }
     }
-    
+
     pub fn rprec(&self) -> u16 {
         match self {
             BiOpKind::Set => 11,
@@ -149,7 +149,7 @@ impl BiOpKind {
             BiOpKind::CmpLe => Ok("jg".to_string()),
             BiOpKind::CmpGt => Ok("jle".to_string()),
             BiOpKind::CmpGe => Ok("jl".to_string()),
-            _ => Err(CompileError::new("invalid cmp for jmp"))
+            _ => Err(CompileError::new("invalid cmp for jmp")),
         }
     }
 }
@@ -160,7 +160,7 @@ pub struct BiOpEx<'b> {
     pub children: [Expr<'b>; 2],
 }
 
-pub fn print<'s>(stmt: &Stmt<'s>, ident: usize) {
+pub fn print(stmt: &Stmt<'_>, ident: usize) {
     let id = format!("{:01$}", ' ', ident);
     match stmt {
         Stmt::Expr(ex) => print_ex(ex, ident),
@@ -177,7 +177,7 @@ pub fn print<'s>(stmt: &Stmt<'s>, ident: usize) {
     }
 }
 
-pub fn print_ex<'e>(ex: &Expr<'e>, ident: usize) {
+pub fn print_ex(ex: &Expr<'_>, ident: usize) {
     let id = format!("{:01$}", ' ', ident);
     match ex {
         Expr::Number(n) => println!("{id}{n}"),
@@ -187,7 +187,7 @@ pub fn print_ex<'e>(ex: &Expr<'e>, ident: usize) {
             print_ex(&ife.condition, ident + 2);
             println!("{id}then:");
             ife.on_true.iter().for_each(|s| print(s, ident + 2));
-            if let Some(ref f) = ife.on_false.as_ref() {
+            if let Some(f) = ife.on_false.as_ref() {
                 println!("{id}else {{");
                 f.iter().for_each(|s| print(s, ident + 2));
                 println!("{id}}}");
@@ -200,13 +200,13 @@ pub fn print_ex<'e>(ex: &Expr<'e>, ident: usize) {
             whl.body.iter().for_each(|s| print(s, ident + 2));
             println!("{id}}}");
         }
-        Expr::SubExpr(sub) => print_ex(&sub, ident),
+        Expr::SubExpr(sub) => print_ex(sub, ident),
         Expr::BiOp(bi) => {
             let [a, b] = &bi.children;
             println!("{id}{{");
             println!("{id} kind: {:?}", bi.kind);
-            print_ex(&a, ident + 2);
-            print_ex(&b, ident + 2);
+            print_ex(a, ident + 2);
+            print_ex(b, ident + 2);
             println!("{id}}}");
         }
         Expr::UnOp(un) => {

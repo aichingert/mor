@@ -1,5 +1,5 @@
-use std::io::Write;
 use std::collections::HashMap;
+use std::io::Write;
 
 use crate::ast::*;
 
@@ -35,27 +35,27 @@ impl Register {
             Register::RBP => "rbp",
             Register::RSP => "rsp",
             Register::R12 => "r12",
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Operand {
-    Reg(Register), // ex: mov !rax!, 1
-    Val(Register), // ex: mov rbx, ![rax]!
-    Implicit, // TODO
-    Immediate(i64),// ex: mov rax, !1!
-    Direct(i64),   // ex: mov rax, ![0x1234]!
+    Reg(Register),  // ex: mov !rax!, 1
+    Val(Register),  // ex: mov rbx, ![rax]!
+    Implicit,       // TODO
+    Immediate(i64), // ex: mov rax, !1!
+    Direct(i64),    // ex: mov rax, ![0x1234]!
     // TODO: not sure if this is needed - difference to indexed comes from the past where only
-    Based(Register, i32), 
+    Based(Register, i32),
     Indexed(Register, i32), // ex: mov rax, ![rsp + 8]!
 }
 
 impl Operand {
     fn to_str(&self) -> String {
         match self {
-            Operand::Reg(reg) => format!("{}", reg.to_str()),
+            Operand::Reg(reg) => reg.to_str().to_string(),
             Operand::Val(reg) => format!("[{}]", reg.to_str()),
             Operand::Immediate(val) => format!("{val}"),
             Operand::Indexed(reg, off) => format!("qword [{} + {off}]", reg.to_str()),
@@ -99,7 +99,9 @@ impl std::fmt::Display for CompileError {
 
 impl CompileError {
     pub fn new(msg: &str) -> CompileError {
-        CompileError { msg: msg.to_string() }
+        CompileError {
+            msg: msg.to_string(),
+        }
     }
 }
 
@@ -118,14 +120,12 @@ pub struct Compiler {
     locals: HashMap<String, i32>,
 }
 
-pub const SET:   u16 = 0b1;
-pub const IF:    u16 = 0b10;
-pub const WHILE: u16 = 0b100;
+pub const SET: u16 = 0b1;
 
 impl<'s> Compiler {
     fn new() -> Self {
-        Self { 
-            rsp: 0, 
+        Self {
+            rsp: 0,
             lbl: 0,
 
             text: Vec::new(),
@@ -135,14 +135,25 @@ impl<'s> Compiler {
 
     fn compile_expr(&mut self, expr: Expr<'s>, flags: u16) -> Result<(), CompileError> {
         let opcode = match expr {
-            Expr::Number(num) => Opcode::Mov(Operand::Reg(Register::RAX), Operand::Immediate(num.parse().map_err(|_| CompileError::new("Number too big"))?)),
+            Expr::Number(num) => Opcode::Mov(
+                Operand::Reg(Register::RAX),
+                Operand::Immediate(
+                    num.parse()
+                        .map_err(|_| CompileError::new("Number too big"))?,
+                ),
+            ),
             Expr::Ident(Ident { value }) => {
-                let Some(offset) = self.locals.get(value) else { return Err(CompileError::new("Ident: not found")); };
-                let (op1, op2) = (Operand::Reg(Register::RAX), Operand::Indexed(Register::RSP, self.rsp - offset));
+                let Some(offset) = self.locals.get(value) else {
+                    return Err(CompileError::new("Ident: not found"));
+                };
+                let (op1, op2) = (
+                    Operand::Reg(Register::RAX),
+                    Operand::Indexed(Register::RSP, self.rsp - offset),
+                );
 
                 match flags & SET == SET {
-                    true  => { Opcode::Lea(op1, op2) },
-                    false => { Opcode::Mov(op1, op2) }
+                    true => Opcode::Lea(op1, op2),
+                    false => Opcode::Mov(op1, op2),
                 }
             }
             Expr::UnOp(unexpr) => {
@@ -156,20 +167,38 @@ impl<'s> Compiler {
             Expr::BiOp(biexpr) => {
                 let [a, b] = biexpr.children;
                 self.compile_expr(b, 0)?;
-                self.text.push(Opcode::Mov(Operand::Reg(Register::RDX), Operand::Reg(Register::RAX)));
+                self.text.push(Opcode::Mov(
+                    Operand::Reg(Register::RDX),
+                    Operand::Reg(Register::RAX),
+                ));
                 self.compile_expr(a, if biexpr.kind == BiOpKind::Set { SET } else { 0 })?;
 
                 match biexpr.kind {
-                    BiOpKind::Add => Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
-                    BiOpKind::Sub => Opcode::Sub(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)),
+                    BiOpKind::Add => {
+                        Opcode::Add(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX))
+                    }
+                    BiOpKind::Sub => {
+                        Opcode::Sub(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX))
+                    }
                     BiOpKind::Mul => Opcode::Mul(Operand::Reg(Register::RDX)),
-                    BiOpKind::Set => Opcode::Mov(Operand::Indexed(Register::RAX, 0), Operand::Reg(Register::RDX)),
+                    BiOpKind::Set => Opcode::Mov(
+                        Operand::Indexed(Register::RAX, 0),
+                        Operand::Reg(Register::RDX),
+                    ),
                     BiOpKind::Div => {
                         self.text.push(Opcode::Cdq);
                         Opcode::Div(Operand::Reg(Register::RDX))
                     }
-                    BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
-                        self.text.push(Opcode::Cmp(Operand::Reg(Register::RAX), Operand::Reg(Register::RDX)));
+                    BiOpKind::CmpEq
+                    | BiOpKind::CmpNe
+                    | BiOpKind::CmpLt
+                    | BiOpKind::CmpLe
+                    | BiOpKind::CmpGt
+                    | BiOpKind::CmpGe => {
+                        self.text.push(Opcode::Cmp(
+                            Operand::Reg(Register::RAX),
+                            Operand::Reg(Register::RDX),
+                        ));
                         Opcode::Jmp(biexpr.kind.to_jmp()?, format!("l{}", self.lbl))
                     }
                     BiOpKind::BoAnd => return Ok(()),
@@ -177,16 +206,22 @@ impl<'s> Compiler {
                 }
             }
             Expr::SubExpr(expr) => return self.compile_expr(*expr, 0),
-            Expr::If(if_expr)   => {
+            Expr::If(if_expr) => {
                 self.lbl += 1;
                 self.compile_expr(if_expr.condition, 0)?;
-                if_expr.on_true.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+                if_expr
+                    .on_true
+                    .into_iter()
+                    .try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
-                    self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", self.lbl + 1)));
+                    self.text
+                        .push(Opcode::Jmp("jmp".to_string(), format!("l{}", self.lbl + 1)));
                     self.text.push(Opcode::Lbl(format!("l{}:", self.lbl)));
                     self.lbl += 1;
-                    else_branch.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+                    else_branch
+                        .into_iter()
+                        .try_for_each(|stmt| self.compile_stmt(stmt))?;
                 }
 
                 self.lbl += 1;
@@ -200,9 +235,13 @@ impl<'s> Compiler {
                 self.compile_expr(while_expr.condition, 0)?;
 
                 self.lbl += 1;
-                while_expr.body.into_iter().try_for_each(|stmt| self.compile_stmt(stmt))?;
+                while_expr
+                    .body
+                    .into_iter()
+                    .try_for_each(|stmt| self.compile_stmt(stmt))?;
 
-                self.text.push(Opcode::Jmp("jmp".to_string(), format!("l{}", lbl)));
+                self.text
+                    .push(Opcode::Jmp("jmp".to_string(), format!("l{}", lbl)));
                 Opcode::Lbl(format!("l{}:", lbl + 1))
             }
         };
@@ -216,7 +255,8 @@ impl<'s> Compiler {
             self.compile_expr(val, 0)?;
         }
 
-        self.locals.insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
+        self.locals
+            .insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
 
         self.text.push(Opcode::Push(Operand::Reg(Register::RAX)));
         self.rsp += 8;
@@ -226,7 +266,7 @@ impl<'s> Compiler {
 
     fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
         match stmt {
-            Stmt::Expr(ex)   => self.compile_expr(ex, 0),
+            Stmt::Expr(ex) => self.compile_expr(ex, 0),
             Stmt::Local(loc) => self.compile_local(loc),
         }
     }
@@ -264,7 +304,9 @@ impl<'s> Compiler {
         file.write_all(b"    syscall\n")?;
 
         use std::process::Command;
-        Command::new("nasm").args(["prog.asm", "-f", "elf64", "-o", "prog.o"]).output()?;
+        Command::new("nasm")
+            .args(["prog.asm", "-f", "elf64", "-o", "prog.o"])
+            .output()?;
         Command::new("gcc").args(["-no-pie", "prog.o"]).output()?;
         Command::new("rm").args(["prog.o"]).output()?;
 
@@ -278,7 +320,8 @@ impl<'s> Compiler {
             compiler.compile_stmt(stmt)?;
         }
 
-        compiler.emit_asm().map_err(|_| CompileError::new("unable to emit asm"))
+        compiler
+            .emit_asm()
+            .map_err(|_| CompileError::new("unable to emit asm"))
     }
 }
-
