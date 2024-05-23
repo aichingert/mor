@@ -76,6 +76,21 @@ impl Operand {
     }
 
     #[inline]
+    fn rax() -> Self {
+        Self::Reg(Register { kind: RegKind::A, size: RegSize::R })
+    }
+
+    #[inline]
+    fn rdx() -> Self {
+        Self::Reg(Register { kind: RegKind::D, size: RegSize::R })
+    }
+    
+    #[inline]
+    fn rcx() -> Self {
+        Self::Reg(Register { kind: RegKind::C, size: RegSize::R })
+    }
+
+    #[inline]
     fn create_reg(kind: RegKind, size: RegSize) -> Self {
         Self::Reg(Register { kind, size })
     }
@@ -93,11 +108,14 @@ enum OpKind {
     Jmp(String, String),
     Cmp(Operand, Operand),
 
+    Or(Operand, Operand),
+    And(Operand, Operand),
+
     Lea(Operand, Operand),
     Mov(Operand, Operand),
     Add(Operand, Operand),
     Sub(Operand, Operand),
-    Cdq,
+
     Div(Operand),
     Mul(Operand),
 
@@ -106,6 +124,8 @@ enum OpKind {
 
     Pop(Operand),
     Push(Operand),
+
+    Cdq,
 }
 
 #[derive(Debug)]
@@ -116,8 +136,8 @@ struct Opcode {
 
 impl Opcode {
     #[inline]
-    fn new(kind: OpKind, size: RegSize) -> Self {
-        Self { kind, size }
+    fn u64(kind: OpKind) -> Self {
+        Self { kind, size: RegSize::R }
     }
 
     fn gen_asm(self) -> String {
@@ -130,6 +150,8 @@ impl Opcode {
             OpKind::Lea(op1, op2) => format!("    lea {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Mov(op1, op2) => format!("    mov {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Add(op1, op2) => format!("    add {}, {}", op1.to_str(), op2.to_str()),
+            OpKind::And(op1, op2) => format!("    and {}, {}", op1.to_str(), op2.to_str()),
+            OpKind::Or(op1, op2) => format!("    or {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Sub(op1, op2) => format!("    sub {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Mul(op) => format!("    imul {}", op.to_str()),
             OpKind::Div(op) => format!("    idiv {}", op.to_str()),
@@ -195,129 +217,139 @@ impl<'s> Compiler {
 
     fn compile_expr(&mut self, expr: Expr<'s>, flags: u16) -> Result<(), CompileError> {
         let opcode = match expr {
-            Expr::Number(num) => Opcode::new(
+            Expr::Number(num) => Opcode::u64(
                 OpKind::Mov(
-                    Operand::create_reg(RegKind::A, RegSize::R),
+                    Operand::rax(),
                     Operand::Immediate(
                         num.parse()
                             .map_err(|_| CompileError::new("Number too big"))?,
                     ),
                 ),
-                RegSize::R,
             ),
             Expr::Ident(Ident { value }) => {
                 let Some(offset) = self.locals.get(value) else {
                     return Err(CompileError::new("Ident: not found"));
                 };
                 let (op1, op2) = (
-                    Operand::create_reg(RegKind::A, RegSize::R),
+                    Operand::rax(),
                     Operand::create_idx(RegKind::SP, RegSize::R, self.rsp - offset),
                 );
 
                 match flags & SET == SET {
-                    true => Opcode::new(OpKind::Lea(op1, op2), RegSize::R),
-                    false => Opcode::new(OpKind::Mov(op1, op2), RegSize::R),
+                    true => Opcode::u64(OpKind::Lea(op1, op2)),
+                    false => Opcode::u64(OpKind::Mov(op1, op2)),
                 }
             }
             Expr::UnOp(unexpr) => {
                 self.compile_expr(unexpr.child, 0)?;
 
-                Opcode::new(
-                    match unexpr.kind {
-                        UnOpKind::Neg => OpKind::Neg(Operand::create_reg(RegKind::A, RegSize::R)),
-                        UnOpKind::Not => OpKind::Not(Operand::create_reg(RegKind::A, RegSize::R)),
-                    },
-                    RegSize::R,
-                )
+                Opcode::u64(match unexpr.kind {
+                    UnOpKind::Neg => OpKind::Neg(Operand::rax()),
+                    UnOpKind::Not => OpKind::Not(Operand::rax()),
+                })
             }
             Expr::BiOp(biexpr) => {
                 let [a, b] = biexpr.children;
-                self.compile_expr(b, 0)?;
-                self.text.push(Opcode::new(
-                    OpKind::Mov(
-                        Operand::create_reg(RegKind::D, RegSize::R),
-                        Operand::create_reg(RegKind::A, RegSize::R),
-                    ),
-                    RegSize::R,
-                ));
-                self.compile_expr(a, if biexpr.kind == BiOpKind::Set { SET } else { 0 })?;
+                
+                match biexpr.kind {
+                    BiOpKind::Add => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
 
-                Opcode::new(
-                    match biexpr.kind {
-                        BiOpKind::Add => OpKind::Add(
-                            Operand::create_reg(RegKind::A, RegSize::R),
-                            Operand::create_reg(RegKind::D, RegSize::R),
-                        ),
-                        BiOpKind::Sub => OpKind::Sub(
-                            Operand::create_reg(RegKind::A, RegSize::R),
-                            Operand::create_reg(RegKind::D, RegSize::R),
-                        ),
-                        BiOpKind::Mul => OpKind::Mul(Operand::create_reg(RegKind::D, RegSize::R)),
-                        BiOpKind::Set => OpKind::Mov(
-                            Operand::create_idx(RegKind::A, RegSize::R, 0),
-                            Operand::create_reg(RegKind::D, RegSize::R),
-                        ),
-                        BiOpKind::Div => {
-                            self.text.push(Opcode::new(OpKind::Cdq, RegSize::R));
-                            OpKind::Div(Operand::create_reg(RegKind::D, RegSize::R))
-                        }
-                        BiOpKind::CmpEq
-                        | BiOpKind::CmpNe
-                        | BiOpKind::CmpLt
-                        | BiOpKind::CmpLe
-                        | BiOpKind::CmpGt
-                        | BiOpKind::CmpGe => {
-                            self.text.push(Opcode::new(
-                                OpKind::Cmp(
-                                    Operand::create_reg(RegKind::A, RegSize::R),
-                                    Operand::create_reg(RegKind::D, RegSize::R),
-                                ),
-                                RegSize::R,
-                            ));
+                        Opcode::u64(OpKind::Add(Operand::rax(), Operand::rdx()))
+                    }
+                    BiOpKind::Sub => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
 
-                            if flags & OR == OR {
-                            } else if flags & AND == AND {
-                            } else {
-                            }
+                        self.text.push(Opcode::u64(OpKind::Sub(Operand::rdx(), Operand::rax())));
+                        Opcode::u64(OpKind::Mov(Operand::rax(), Operand::rdx()))
+                    }
+                    BiOpKind::Mul => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
 
-                            OpKind::Jmp(biexpr.kind.to_jmp()?, format!("l{}", self.lbl))
-                        }
-                        BiOpKind::BoAnd => return Ok(()),
-                        _ => todo!(),
-                    },
-                    RegSize::R,
-                )
+                        Opcode::u64(OpKind::Mul(Operand::rdx()))
+                    }
+                    BiOpKind::Div => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
+
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rcx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rax(), Operand::rdx())));
+                        self.text.push(Opcode::u64(OpKind::Cdq));
+                        Opcode::u64(OpKind::Div(Operand::rcx()))
+                    }
+                    BiOpKind::Set => {
+                        self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(a, SET)?;
+
+                        Opcode::u64(OpKind::Mov(Operand::create_idx(RegKind::A, RegSize::R, 0), Operand::rdx()))
+                    }
+                    BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
+
+                        self.text.push(Opcode::u64(OpKind::Cmp(Operand::rax(), Operand::rdx())));
+
+                        Opcode::u64(OpKind::Jmp(biexpr.kind.to_jmp()?, format!("l{}", self.lbl)))
+                    }
+                    BiOpKind::BiOr => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
+
+                        Opcode::u64(OpKind::Or(Operand::rax(), Operand::rdx()))
+                    }
+                    BiOpKind::BiAnd => {
+                        self.compile_expr(a, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.compile_expr(b, 0)?;
+
+                        Opcode::u64(OpKind::And(Operand::rax(), Operand::rdx()))
+                    }
+                    BiOpKind::BoOr => {
+                        return Ok(());
+                    }
+                    BiOpKind::BoAnd => {
+                        return Ok(());
+                    }
+                }
             }
             Expr::SubExpr(expr) => return self.compile_expr(*expr, 0),
             Expr::If(if_expr) => {
+                let mut lbl = self.lbl;
                 self.compile_expr(if_expr.condition, 0)?;
+
+                self.lbl += 1;
                 if_expr
                     .on_true
                     .into_iter()
                     .try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
-                    self.text.push(Opcode::new(
-                        OpKind::Jmp("jmp".to_string(), format!("l{}", self.lbl + 1)),
-                        RegSize::R,
-                    ));
-                    self.text.push(Opcode::new(
-                        OpKind::Lbl(format!("l{}:", self.lbl)),
-                        RegSize::R,
-                    ));
+                    println!("{lbl}");
+                    self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl + 1))));
+                    self.text.push(Opcode::u64(OpKind::Lbl(format!("l{}:", lbl))));
                     self.lbl += 1;
+                    lbl += 1;
                     else_branch
                         .into_iter()
                         .try_for_each(|stmt| self.compile_stmt(stmt))?;
                 }
 
                 self.lbl += 1;
-                Opcode::new(OpKind::Lbl(format!("l{}:", self.lbl - 1)), RegSize::R)
+                Opcode::u64(OpKind::Lbl(format!("l{}:", lbl)))
             }
             Expr::While(while_expr) => {
                 let lbl = self.lbl;
-                self.text
-                    .push(Opcode::new(OpKind::Lbl(format!("l{}:", lbl)), RegSize::R));
+                self.text.push(Opcode::u64(OpKind::Lbl(format!("l{}:", lbl))));
 
                 self.lbl += 1;
                 self.compile_expr(while_expr.condition, 0)?;
@@ -329,9 +361,8 @@ impl<'s> Compiler {
                     .try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 self.lbl += 1;
-                self.text
-                    .push(Opcode::new(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl)), RegSize::R));
-                Opcode::new(OpKind::Lbl(format!("l{}:", lbl + 1)), RegSize::R)
+                self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl))));
+                Opcode::u64(OpKind::Lbl(format!("l{}:", lbl + 1)))
             }
         };
         self.text.push(opcode);
@@ -344,13 +375,8 @@ impl<'s> Compiler {
             self.compile_expr(val, 0)?;
         }
 
-        self.locals
-            .insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
-
-        self.text.push(Opcode::new(
-            OpKind::Push(Operand::create_reg(RegKind::A, RegSize::R)),
-            RegSize::R,
-        ));
+        self.locals.insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
+        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
         self.rsp += 8;
 
         Ok(())

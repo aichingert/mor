@@ -145,10 +145,10 @@ impl BiOpKind {
         match self {
             BiOpKind::CmpEq => Ok("jne".to_string()),
             BiOpKind::CmpNe => Ok("je".to_string()),
-            BiOpKind::CmpLt => Ok("jge".to_string()),
-            BiOpKind::CmpLe => Ok("jg".to_string()),
-            BiOpKind::CmpGt => Ok("jle".to_string()),
-            BiOpKind::CmpGe => Ok("jl".to_string()),
+            BiOpKind::CmpLt => Ok("jle".to_string()),
+            BiOpKind::CmpLe => Ok("jl".to_string()),
+            BiOpKind::CmpGt => Ok("jg".to_string()),
+            BiOpKind::CmpGe => Ok("jge".to_string()),
             _ => Err(CompileError::new("invalid cmp for jmp")),
         }
     }
