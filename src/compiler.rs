@@ -215,6 +215,24 @@ impl<'s> Compiler {
         }
     }
 
+    #[inline]
+    fn push_rax(&mut self) {
+        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+        self.rsp += 8;
+    }
+
+    #[inline]
+    fn pop_rax(&mut self) {
+        self.text.push(Opcode::u64(OpKind::Pop(Operand::rax())));
+        self.rsp -= 8;
+    }
+
+    #[inline]
+    fn pop_rdx(&mut self) {
+        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+        self.rsp -= 8;
+    } 
+
     fn compile_expr(&mut self, expr: Expr<'s>, flags: u16) -> Result<(), CompileError> {
         let opcode = match expr {
             Expr::Number(num) => Opcode::u64(
@@ -254,64 +272,52 @@ impl<'s> Compiler {
                 match biexpr.kind {
                     BiOpKind::Add => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
-                        self.rsp -= 8;
+                        self.pop_rdx();
 
                         Opcode::u64(OpKind::Add(Operand::rax(), Operand::rdx()))
                     }
                     BiOpKind::Sub => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
                         self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rax())));
-                        self.rsp -= 8;
+                        self.pop_rax();
 
                         Opcode::u64(OpKind::Sub(Operand::rax(), Operand::rdx()))
                     }
                     BiOpKind::Mul => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
-                        self.rsp -= 8;
+                        self.pop_rdx();
 
                         Opcode::u64(OpKind::Mul(Operand::rdx()))
                     }
                     BiOpKind::Div => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rcx(), Operand::rax())));
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rax())));
-                        self.rsp -= 8;
-
                         self.text.push(Opcode::u64(OpKind::Cdq));
+                        self.pop_rax();
+                        
                         Opcode::u64(OpKind::Div(Operand::rcx()))
                     }
                     BiOpKind::Set => {
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(a, SET)?;
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
-                        self.rsp -= 8;
+                        self.pop_rdx();
 
                         Opcode::u64(OpKind::Mov(Operand::create_idx(RegKind::A, RegSize::R, 0), Operand::rdx()))
                     }
                     BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
-                        self.rsp -= 8;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.pop_rax();
 
                         self.text.push(Opcode::u64(OpKind::Cmp(Operand::rax(), Operand::rdx())));
 
@@ -319,28 +325,34 @@ impl<'s> Compiler {
                     }
                     BiOpKind::BiOr => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
-                        self.rsp -= 8;
+                        self.pop_rdx();
 
                         Opcode::u64(OpKind::Or(Operand::rax(), Operand::rdx()))
                     }
                     BiOpKind::BiAnd => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-                        self.rsp += 8;
+                        self.push_rax();
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
-                        self.rsp -= 8;
+                        self.pop_rdx();
 
                         Opcode::u64(OpKind::And(Operand::rax(), Operand::rdx()))
                     }
-                    BiOpKind::BoOr => {
+                    BiOpKind::BoOr => {  // TODO: does not work
+                        // this needs a better label management
+                        // than the current one because it gets
+                        // very hard very fast to keep track of
+                        // all the different label numbers
+
+                        self.compile_expr(a, OR)?;
+                        self.compile_expr(b, 0)?;
                         return Ok(());
                     }
-                    BiOpKind::BoAnd => {
+                    BiOpKind::BoAnd => { // TODO: does not work
+                        self.compile_expr(a, AND)?;
+                        self.compile_expr(b, 0)?;
+
                         return Ok(());
                     }
                 }

@@ -7,10 +7,9 @@ the mor programming language, it was created to build a compiler as a hobby and 
 
 == TODOs:
 
-* [~] Yet another compiler and ast refactor
-* [ ] Fix pointer bug
 * [x] Implement else expr
 * [x] Implement loops
+* [ ] Implement boolean logic (a = 10 > 4, etc.)
 * [ ] Come up with easy syntax
 * [ ] Maybe delete pointers as a whole because they don't add to the simplistic aspect of the language
 
