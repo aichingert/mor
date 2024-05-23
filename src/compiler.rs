@@ -254,47 +254,64 @@ impl<'s> Compiler {
                 match biexpr.kind {
                     BiOpKind::Add => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+                        self.rsp -= 8;
 
                         Opcode::u64(OpKind::Add(Operand::rax(), Operand::rdx()))
                     }
                     BiOpKind::Sub => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rax())));
+                        self.rsp -= 8;
 
-                        self.text.push(Opcode::u64(OpKind::Sub(Operand::rdx(), Operand::rax())));
-                        Opcode::u64(OpKind::Mov(Operand::rax(), Operand::rdx()))
+                        Opcode::u64(OpKind::Sub(Operand::rax(), Operand::rdx()))
                     }
                     BiOpKind::Mul => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+                        self.rsp -= 8;
 
                         Opcode::u64(OpKind::Mul(Operand::rdx()))
                     }
                     BiOpKind::Div => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
-
                         self.text.push(Opcode::u64(OpKind::Mov(Operand::rcx(), Operand::rax())));
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rax(), Operand::rdx())));
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rax())));
+                        self.rsp -= 8;
+
                         self.text.push(Opcode::u64(OpKind::Cdq));
                         Opcode::u64(OpKind::Div(Operand::rcx()))
                     }
                     BiOpKind::Set => {
                         self.compile_expr(b, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(a, SET)?;
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+                        self.rsp -= 8;
 
                         Opcode::u64(OpKind::Mov(Operand::create_idx(RegKind::A, RegSize::R, 0), Operand::rdx()))
                     }
                     BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+                        self.rsp -= 8;
 
                         self.text.push(Opcode::u64(OpKind::Cmp(Operand::rax(), Operand::rdx())));
 
@@ -302,15 +319,21 @@ impl<'s> Compiler {
                     }
                     BiOpKind::BiOr => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+                        self.rsp -= 8;
 
                         Opcode::u64(OpKind::Or(Operand::rax(), Operand::rdx()))
                     }
                     BiOpKind::BiAnd => {
                         self.compile_expr(a, 0)?;
-                        self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::rax())));
+                        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
+                        self.rsp += 8;
                         self.compile_expr(b, 0)?;
+                        self.text.push(Opcode::u64(OpKind::Pop(Operand::rdx())));
+                        self.rsp -= 8;
 
                         Opcode::u64(OpKind::And(Operand::rax(), Operand::rdx()))
                     }
@@ -334,7 +357,6 @@ impl<'s> Compiler {
                     .try_for_each(|stmt| self.compile_stmt(stmt))?;
 
                 if let Some(else_branch) = if_expr.on_false {
-                    println!("{lbl}");
                     self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl + 1))));
                     self.text.push(Opcode::u64(OpKind::Lbl(format!("l{}:", lbl))));
                     self.lbl += 1;
@@ -348,6 +370,7 @@ impl<'s> Compiler {
                 Opcode::u64(OpKind::Lbl(format!("l{}:", lbl)))
             }
             Expr::While(while_expr) => {
+                self.lbl += 1;
                 let lbl = self.lbl;
                 self.text.push(Opcode::u64(OpKind::Lbl(format!("l{}:", lbl))));
 
@@ -360,7 +383,7 @@ impl<'s> Compiler {
                     .into_iter()
                     .try_for_each(|stmt| self.compile_stmt(stmt))?;
 
-                self.lbl += 1;
+                self.lbl += 2;
                 self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl))));
                 Opcode::u64(OpKind::Lbl(format!("l{}:", lbl + 1)))
             }
