@@ -1,13 +1,13 @@
 use crate::CompileError;
 use crate::Token;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt<'s> {
     Local(Local<'s>),
     Expr(Expr<'s>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Local<'l> {
     pub name: &'l str,
     pub size: Option<&'l str>,
@@ -24,7 +24,7 @@ impl<'l> Local<'l> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr<'e> {
     Number(&'e str),
 
@@ -40,20 +40,20 @@ pub enum Expr<'e> {
     BiOp(Box<BiOpEx<'e>>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Index<'i> {
     pub base:  Expr<'i>, // i64 `base`[10];
     pub index: Expr<'i>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct If<'i> {
     pub condition: Expr<'i>,
     pub on_true: Block<'i>,
     pub on_false: Option<Block<'i>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct While<'w> {
     pub condition: Expr<'w>,
     pub body: Block<'w>,
@@ -67,7 +67,7 @@ pub enum UnOpKind {
     Neg,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnOpEx<'u> {
     pub kind: UnOpKind,
     pub child: Expr<'u>,
@@ -154,7 +154,7 @@ impl BiOpKind {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BiOpEx<'b> {
     pub kind: BiOpKind,
     pub children: [Expr<'b>; 2],

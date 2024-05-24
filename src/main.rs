@@ -1,11 +1,4 @@
-mod ast;
-use ast::*;
-
-mod parser;
-use parser::*;
-
-mod compiler;
-use compiler::*;
+use mor::*;
 
 fn main() -> std::io::Result<()> {
     let Some(file) = std::env::args().nth(1) else {
@@ -38,9 +31,6 @@ fn main() -> std::io::Result<()> {
         print(stmt, 0);
         println!("=====");
     }
-
-    // 
-
 
     Compiler::compile(block).unwrap();
 

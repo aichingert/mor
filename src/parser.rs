@@ -93,7 +93,7 @@ impl<'t> Token<'t> {
 }
 
 impl<'t> Tokenizer<'t> {
-    fn tokenize(source: &'t [u8]) -> Vec<Token<'t>> {
+    pub fn tokenize(source: &'t [u8]) -> Vec<Token<'t>> {
         let mut tokenizer = Self::new(source);
         tokenizer.run();
         tokenizer.tokens
