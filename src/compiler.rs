@@ -52,7 +52,7 @@ impl Register {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Operand {
     Reg(Register),  // ex: mov !rax!, 1
     Val(Register),  // ex: mov rbx, ![rax]!
@@ -61,7 +61,7 @@ enum Operand {
     Direct(i64),    // ex: mov rax, ![0x1234]!
     // TODO: not sure if this is needed - difference to indexed comes from the past where only
     Based(Register, i32),
-    Indexed(Register, i32), // ex: mov rax, ![rsp + 8]!
+    Indexed(Register, Box<Operand>), // ex: mov rax, ![rsp + 8]!
 }
 
 impl Operand {
@@ -70,7 +70,7 @@ impl Operand {
             Operand::Reg(reg) => reg.to_str().to_string(),
             Operand::Val(reg) => format!("[{}]", reg.to_str()),
             Operand::Immediate(val) => format!("{val}"),
-            Operand::Indexed(reg, off) => format!("qword [{} + {off}]", reg.to_str()),
+            Operand::Indexed(reg, off) => format!("qword [{} + {}]", reg.to_str(), off.to_str()),
             _ => todo!(),
         }
     }
@@ -91,13 +91,18 @@ impl Operand {
     }
 
     #[inline]
-    fn create_reg(kind: RegKind, size: RegSize) -> Self {
+    fn reg(kind: RegKind, size: RegSize) -> Self {
         Self::Reg(Register { kind, size })
     }
 
     #[inline]
-    fn create_idx(kind: RegKind, size: RegSize, idx: i32) -> Self {
-        Self::Indexed(Register { kind, size }, idx)
+    fn indexed(kind: RegKind, size: RegSize, idx: Operand) -> Self {
+        Self::Indexed(Register { kind, size }, Box::new(idx))
+    }
+
+    #[inline]
+    fn immediate(val: i64) -> Self {
+        Self::Immediate(val)
     }
 }
 
@@ -115,6 +120,7 @@ enum OpKind {
     Mov(Operand, Operand),
     Add(Operand, Operand),
     Sub(Operand, Operand),
+    Xor(Operand, Operand),
 
     Div(Operand),
     Mul(Operand),
@@ -153,6 +159,7 @@ impl Opcode {
             OpKind::And(op1, op2) => format!("    and {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Or(op1, op2) => format!("    or {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Sub(op1, op2) => format!("    sub {}, {}", op1.to_str(), op2.to_str()),
+            OpKind::Xor(op1, op2) => format!("    xor {}, {}", op1.to_str(), op2.to_str()),
             OpKind::Mul(op) => format!("    imul {}", op.to_str()),
             OpKind::Div(op) => format!("    idiv {}", op.to_str()),
             OpKind::Neg(op) => format!("    neg {}", op.to_str()),
@@ -193,16 +200,17 @@ impl std::error::Error for CompileError {
 
 #[derive(Debug)]
 pub struct Compiler {
-    rsp: i32,
-    lbl: i32,
+    rsp: u64,
+    lbl: u64,
 
     text: Vec<Opcode>, // section
-    locals: HashMap<String, i32>,
+    locals: HashMap<String, u64>,
 }
 
 pub const SET: u16 = 0x1;
 pub const OR:  u16 = 0x2;
 pub const AND: u16 = 0x4;
+pub const IDX: u16 = 0x8;
 
 impl<'s> Compiler {
     fn new() -> Self {
@@ -244,19 +252,32 @@ impl<'s> Compiler {
                     ),
                 ),
             ),
-            Expr::Ident(Ident { value }) => {
-                let Some(offset) = self.locals.get(value) else {
+            Expr::Ident(ident) => {
+                let Some(offset) = self.locals.get(ident) else {
                     return Err(CompileError::new("Ident: not found"));
                 };
-                let (op1, op2) = (
-                    Operand::rax(),
-                    Operand::create_idx(RegKind::SP, RegSize::R, self.rsp - offset),
-                );
+                let mut rsp = Operand::indexed(RegKind::SP, RegSize::R, Operand::immediate((self.rsp - offset) as i64));
+
+                if flags & IDX == IDX {
+                    self.text.push(Opcode::u64(OpKind::Add(Operand::rax(), Operand::immediate((self.rsp - offset) as i64))));
+                    rsp = Operand::indexed(RegKind::SP, RegSize::R, Operand::rax());
+                }
 
                 match flags & SET == SET {
-                    true => Opcode::u64(OpKind::Lea(op1, op2)),
-                    false => Opcode::u64(OpKind::Mov(op1, op2)),
+                    true => Opcode::u64(OpKind::Lea(Operand::rax(), rsp)),
+                    false => Opcode::u64(OpKind::Mov(Operand::rax(), rsp)),
                 }
+            }
+            Expr::Index(index) => {
+                self.compile_expr(index.index, 0)?;
+                // TODO: fix this to be dependent on the size of the variables
+                // when the time comes where I have to implement types
+                self.text.push(Opcode::u64(OpKind::Mov(Operand::rdx(), Operand::immediate(8))));
+                self.text.push(Opcode::u64(OpKind::Mul(Operand::rdx())));
+                self.text.push(Opcode::u64(OpKind::Neg(Operand::rax())));
+                self.compile_expr(index.base, flags | IDX)?;
+
+                return Ok(());
             }
             Expr::UnOp(unexpr) => {
                 self.compile_expr(unexpr.child, 0)?;
@@ -310,7 +331,7 @@ impl<'s> Compiler {
                         self.compile_expr(a, SET)?;
                         self.pop_rdx();
 
-                        Opcode::u64(OpKind::Mov(Operand::create_idx(RegKind::A, RegSize::R, 0), Operand::rdx()))
+                        Opcode::u64(OpKind::Mov(Operand::indexed(RegKind::A, RegSize::R, Operand::immediate(0)), Operand::rdx()))
                     }
                     BiOpKind::CmpEq | BiOpKind::CmpNe | BiOpKind::CmpLt | BiOpKind::CmpLe | BiOpKind::CmpGt | BiOpKind::CmpGe => {
                         self.compile_expr(a, 0)?;
@@ -406,14 +427,23 @@ impl<'s> Compiler {
     }
 
     fn compile_local(&mut self, local: Local<'s>) -> Result<(), CompileError> {
+        let mut offset = (self.locals.len() + 1) as u64 * 8;
+
         if let Some(val) = local.value {
             self.compile_expr(val, 0)?;
+            self.push_rax();
+        } else if let Some(size) = local.size {
+            // ARRAY:
+
+            // FIXME: has to be changed when working with other sizes
+            let mut val = size.parse::<u64>().map_err(|_| CompileError::new("invalid array size"))?;
+            offset = (self.locals.len() as u64 + val) * 8;
+            // FIXME: right sizes when the time comes
+            self.rsp += val * 8;
+            (0..val).for_each(|_| self.text.push(Opcode::u64(OpKind::Push(Operand::immediate(0)))));
         }
 
-        self.locals.insert(local.name.to_string(), (self.locals.len() + 1) as i32 * 8);
-        self.text.push(Opcode::u64(OpKind::Push(Operand::rax())));
-        self.rsp += 8;
-
+        self.locals.insert(local.name.to_string(), offset);
         Ok(())
     }
 

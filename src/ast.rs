@@ -10,6 +10,8 @@ pub enum Stmt<'s> {
 #[derive(Debug, Clone)]
 pub struct Local<'l> {
     pub name: &'l str,
+    pub size: Option<&'l str>,
+
     // TODO: support => auto x = Expr;
     pub typ: Option<Token<'l>>,
     // Option to support => i8 x;
@@ -17,15 +19,18 @@ pub struct Local<'l> {
 }
 
 impl<'l> Local<'l> {
-    pub fn new(name: &'l str, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
-        Self { name, typ, value }
+    pub fn new(name: &'l str, size: Option<&'l str>, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
+        Self { name, size, typ, value }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr<'e> {
     Number(&'e str),
-    Ident(Ident<'e>),
+
+    Ident(&'e str),
+    Index(Box<Index<'e>>),
+
     If(Box<If<'e>>),
     While(Box<While<'e>>),
 
@@ -33,6 +38,12 @@ pub enum Expr<'e> {
 
     UnOp(Box<UnOpEx<'e>>),
     BiOp(Box<BiOpEx<'e>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Index<'i> {
+    pub base:  Expr<'i>, // i64 `base`[10];
+    pub index: Expr<'i>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,17 +60,6 @@ pub struct While<'w> {
 }
 
 pub type Block<'b> = Vec<Stmt<'b>>;
-
-#[derive(Debug, Clone)]
-pub struct Ident<'i> {
-    pub value: &'i str,
-}
-
-impl<'i> Ident<'i> {
-    pub fn new(value: &'i str) -> Self {
-        Ident { value }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnOpKind {
@@ -165,9 +165,12 @@ pub fn print(stmt: &Stmt<'_>, ident: usize) {
     match stmt {
         Stmt::Expr(ex) => print_ex(ex, ident),
         Stmt::Local(loc) => {
-            print!("{id}{}", loc.name);
+            println!("{id}{}", loc.name);
+            if let Some(size) = &loc.size {
+                println!("{id}[{size}]");
+            }
             if let Some(ex) = &loc.value {
-                println!(" = {{");
+                println!("{id} = {{");
                 print_ex(ex, ident + 2);
                 println!("{id}}}");
             } else {
@@ -181,7 +184,13 @@ pub fn print_ex(ex: &Expr<'_>, ident: usize) {
     let id = format!("{:01$}", ' ', ident);
     match ex {
         Expr::Number(n) => println!("{id}{n}"),
-        Expr::Ident(Ident { value }) => println!("{id}{value}"),
+        Expr::Ident(ident) => println!("{id}{ident}"),
+        Expr::Index(index) => {
+            print_ex(&index.base, ident + 2);
+            println!("{id}[");
+            print_ex(&index.index, ident + 2);
+            println!("{id}]");
+        }
         Expr::If(ife) => {
             println!("{id}if");
             print_ex(&ife.condition, ident + 2);

@@ -163,7 +163,7 @@ impl<'t> Tokenizer<'t> {
             '<' => mk_tok2!(Token::Lt, b'=', Token::Le),
             '=' => mk_tok2!(Token::Assign, b'=', Token::Eq),
             '!' => mk_tok2!(Token::Not, b'=', Token::Ne),
-            '(' | ')' | '{' | '}' => mk_tok!(Token::Paren(at as char)),
+            '(' | ')' | '{' | '}' | '[' | ']' => mk_tok!(Token::Paren(at as char)),
             ',' => mk_tok!(Token::Comma),
             ';' => mk_tok!(Token::Semicolon),
             _ => (),
@@ -236,7 +236,7 @@ impl<'p, 't> Parser<'p, 't> {
 
         panic!("expected token of type: {token:?} but found nothing!");
     }
-
+    
     fn expect_ident(&mut self) -> &'t str {
         if let Some(Token::Ident(id)) = self.next() {
             return id;
@@ -245,11 +245,19 @@ impl<'p, 't> Parser<'p, 't> {
         panic!("expected identifier");
     }
 
+    fn expect_num(&mut self) -> &'t str {
+        if let Some(Token::Number(num)) = self.next() {
+            return num;
+        }
+
+        panic!("expected number");
+    }
+
     fn parse_leading_expr(&mut self) -> Option<Expr<'t>> {
         let tok = *self.next()?;
 
         match tok {
-            Token::Ident(id) => return Some(Expr::Ident(Ident::new(id))),
+            Token::Ident(id) => return Some(Expr::Ident(id)),
             Token::Number(n) => return Some(Expr::Number(n)),
             Token::KwIf => return self.parse_if(),
             Token::KwWhile => return self.parse_while(),
@@ -292,6 +300,20 @@ impl<'p, 't> Parser<'p, 't> {
                 }
             }
 
+            if Token::Paren('[') == *cur {
+                self.next().unwrap();
+
+                let idx = self.parse_expr(0)?;
+                self.expect(&Token::Paren(']'));
+
+                res = Expr::Index(Box::new(Index {
+                    base: res,
+                    index: idx,
+                }));
+
+                continue;
+            }
+
             break;
         }
 
@@ -302,13 +324,20 @@ impl<'p, 't> Parser<'p, 't> {
         let typ = self.next().copied();
         let name = self.expect_ident();
 
+        let mut size = None;
+        if let Some(Token::Paren('[')) = self.peek(0) {
+            self.next().unwrap();
+            size = Some(self.expect_num());
+            self.expect(&Token::Paren(']'));
+        }
+
         let mut value = None;
         if let Some(Token::Assign) = self.peek(0) {
             self.next().unwrap();
             value = Some(self.parse_expr(0)?);
         }
 
-        Some(Local::new(name, typ, value))
+        Some(Local::new(name, size, typ, value))
     }
 
     pub fn parse_if(&mut self) -> Option<Expr<'t>> {
