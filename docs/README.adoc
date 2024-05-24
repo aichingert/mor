@@ -5,17 +5,27 @@ aichingert
 
 the mor programming language, it was created to build a compiler as a hobby and develop my own programming language where I can play with the syntax as much as I want to be able to write consice and okayish performant programs.
 
-== TODOs:
+== todo:
 
 * [x] Implement else expr
+* [x] Implement arrays
 * [x] Implement loops
+* [ ] Implement functions
 * [ ] Implement boolean logic (a = 10 > 4, etc.)
 * [ ] Come up with easy syntax
-* [ ] Maybe delete pointers as a whole because they don't add to the simplistic aspect of the language
 
-== Bugs:
+== bug:
 
-* [ ] wrong pointer dereferencing (*d = &a | a = *d), they are currently disabled since they cause too many bugs at the moment
 * [ ] if has a few bugs with && and || precedence
 * [ ] when there is an if or another loop inside a loop then the labels will get messed up resulting in infinite loops
 * [ ] probably a few more lurking
+
+== far future
+
+these goals could take as long as 10 - 15 years (still very ambitious but would be very interesting)
+
+* [ ] complete mor language
+* [ ] write self hosted version
+* [ ] write the morsm assembler in mor
+* [ ] write the morld linker in mor
+* [ ] write the moros operating system in mor

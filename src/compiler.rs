@@ -366,15 +366,10 @@ impl<'s> Compiler {
                         // very hard very fast to keep track of
                         // all the different label numbers
 
-                        self.compile_expr(a, OR)?;
-                        self.compile_expr(b, 0)?;
-                        return Ok(());
+                        todo!();
                     }
                     BiOpKind::BoAnd => { // TODO: does not work
-                        self.compile_expr(a, AND)?;
-                        self.compile_expr(b, 0)?;
-
-                        return Ok(());
+                        todo!();
                     }
                 }
             }
