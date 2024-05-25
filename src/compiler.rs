@@ -47,6 +47,11 @@ impl Register {
             (RegKind::C, RegSize::R) => "rcx",
             (RegKind::D, RegSize::R) => "rdx",
             (RegKind::SP, RegSize::R) => "rsp",
+            (RegKind::BP, RegSize::R) => "rbp",
+            (RegKind::DI, RegSize::R) => "rdi",
+            (RegKind::SI, RegSize::R) => "rsi",
+            (RegKind::R8, RegSize::R) => "r8",
+            (RegKind::R9, RegSize::R) => "r9",
             _ => todo!(),
         }
     }
@@ -148,7 +153,7 @@ impl Opcode {
 
     fn gen_asm(self) -> String {
         match self.kind {
-            OpKind::Lbl(lbl) => lbl,
+            OpKind::Lbl(lbl) => format!("{lbl}:"),
 
             OpKind::Jmp(knd, lbl) => format!("    {knd} {lbl}"),
 
@@ -200,11 +205,12 @@ impl std::error::Error for CompileError {
 
 #[derive(Debug)]
 pub struct Compiler {
-    rsp: u64,
-    lbl: u64,
+    rsp: i64,
+    lbl: i64,
 
     text: Vec<Opcode>, // section
-    locals: HashMap<String, u64>,
+    func: Vec<Opcode>,
+    locals: HashMap<String, i64>,
 }
 
 pub const SET: u16 = 0x1;
@@ -219,6 +225,7 @@ impl<'s> Compiler {
             lbl: 0,
 
             text: Vec::new(),
+            func: Vec::new(),
             locals: HashMap::new(),
         }
     }
@@ -368,7 +375,8 @@ impl<'s> Compiler {
 
                         todo!();
                     }
-                    BiOpKind::BoAnd => { // TODO: does not work
+                    BiOpKind::BoAnd => { 
+                        // TODO: does not work
                         todo!();
                     }
                 }
@@ -386,7 +394,7 @@ impl<'s> Compiler {
 
                 if let Some(else_branch) = if_expr.on_false {
                     self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl + 1))));
-                    self.text.push(Opcode::u64(OpKind::Lbl(format!("l{}:", lbl))));
+                    self.text.push(Opcode::u64(OpKind::Lbl(format!("    l{}", lbl))));
                     self.lbl += 1;
                     lbl += 1;
                     else_branch
@@ -395,12 +403,12 @@ impl<'s> Compiler {
                 }
 
                 self.lbl += 1;
-                Opcode::u64(OpKind::Lbl(format!("l{}:", lbl)))
+                Opcode::u64(OpKind::Lbl(format!("    l{}", lbl)))
             }
             Expr::While(while_expr) => {
                 self.lbl += 1;
                 let lbl = self.lbl;
-                self.text.push(Opcode::u64(OpKind::Lbl(format!("l{}:", lbl))));
+                self.text.push(Opcode::u64(OpKind::Lbl(format!("    l{}", lbl))));
 
                 self.lbl += 1;
                 self.compile_expr(while_expr.condition, 0)?;
@@ -413,18 +421,64 @@ impl<'s> Compiler {
 
                 self.lbl += 2;
                 self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl))));
-                Opcode::u64(OpKind::Lbl(format!("l{}:", lbl + 1)))
+                Opcode::u64(OpKind::Lbl(format!("    l{}", lbl + 1)))
             }
-            Expr::Call(call) => todo!(),
-            Expr::Return(ret) => todo!(),
+            Expr::Call(call) => return Ok(()),
+            Expr::Return(ret) => return Ok(()),
         };
         self.text.push(opcode);
 
         Ok(())
     }
 
+    fn get_function_arg_register(pos: usize) -> Operand {
+        // Linux calling convention
+        match pos {
+            0 => Operand::reg(RegKind::DI, RegSize::R),
+            1 => Operand::reg(RegKind::SI, RegSize::R),
+            2 => Operand::reg(RegKind::D, RegSize::R),
+            3 => Operand::reg(RegKind::C, RegSize::R),
+            4 => Operand::reg(RegKind::R8, RegSize::R),
+            5 => Operand::reg(RegKind::R9, RegSize::R),
+            _ => Operand::indexed(RegKind::BP, RegSize::R, Operand::Immediate((pos as i64 - 4) * 8)),
+        }
+    }
+
+    fn compile_func(&mut self, fun: Func<'s>) -> Result<(), CompileError> {
+        self.func.push(Opcode::u64(OpKind::Lbl(fun.name.to_string())));
+        self.func.push(Opcode::u64(OpKind::Push(Operand::reg(RegKind::BP, RegSize::R))));
+        self.func.push(Opcode::u64(OpKind::Mov(Operand::reg(RegKind::BP, RegSize::R), Operand::reg(RegKind::SP, RegSize::R))));
+
+        let mut scope: HashMap<String, i64> = HashMap::new();
+        let mut rbp: i64 = -8;
+
+        for (i, arg) in fun.args.iter().enumerate() {
+            if let Some(size) = arg.size {
+                todo!();
+            } else {
+                scope.insert(arg.name.to_string(), rbp);
+                self.func.push(
+                    Opcode::u64(
+                        OpKind::Mov(
+                            Operand::indexed(RegKind::BP, RegSize::R, Operand::Immediate(rbp)),
+                            Compiler::get_function_arg_register(i),
+                        )
+                    )
+                );
+            }
+
+            rbp -= 8;
+        }
+
+        println!("{scope:?}");
+
+        self.func.push(Opcode::u64(OpKind::Mov(Operand::reg(RegKind::SP, RegSize::R), Operand::reg(RegKind::BP, RegSize::R))));
+        self.func.push(Opcode::u64(OpKind::Pop(Operand::reg(RegKind::BP, RegSize::R))));
+        Ok(())
+    }
+
     fn compile_local(&mut self, local: Local<'s>) -> Result<(), CompileError> {
-        let mut offset = (self.locals.len() + 1) as u64 * 8;
+        let mut offset = (self.locals.len() + 1) as i64 * 8;
 
         if let Some(val) = local.value {
             self.compile_expr(val, 0)?;
@@ -433,8 +487,8 @@ impl<'s> Compiler {
             // ARRAY:
 
             // FIXME: has to be changed when working with other sizes
-            let mut val = size.parse::<u64>().map_err(|_| CompileError::new("invalid array size"))?;
-            offset = (self.locals.len() as u64 + val) * 8;
+            let mut val = size.parse::<i64>().map_err(|_| CompileError::new("invalid array size"))?;
+            offset = (self.locals.len() as i64 + val) * 8;
             // FIXME: right sizes when the time comes
             self.rsp += val * 8;
             (0..val).for_each(|_| self.text.push(Opcode::u64(OpKind::Push(Operand::immediate(0)))));
@@ -447,14 +501,22 @@ impl<'s> Compiler {
     fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
         match stmt {
             Stmt::Expr(ex) => self.compile_expr(ex, 0),
-            Stmt::Func(fun) => todo!(),
+            Stmt::Func(fun) => self.compile_func(fun),
             Stmt::Local(loc) => self.compile_local(loc),
         }
     }
 
     fn emit_asm(self) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = std::fs::File::create("prog.asm")?;
-        file.write_all(b"section .text\n  global main\nmain:\n")?;
+        file.write_all(b"section .text\n\n")?;
+        
+        for opcode in self.func.into_iter() {
+            let mut line = opcode.gen_asm();
+            line.push('\n');
+            file.write_all(&line.bytes().collect::<Vec<_>>())?;
+
+        }
+        file.write_all(b"\nglobal main\nmain:\n")?;
 
         for opcode in self.text.into_iter() {
             let mut line = opcode.gen_asm();

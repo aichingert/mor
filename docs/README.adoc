@@ -11,6 +11,9 @@ the mor programming language, it was created to build a compiler as a hobby and 
 * [x] Implement arrays
 * [x] Implement loops
 * [ ] Implement functions
+** functions need a complete compiler refactor
+** [ ] Implementing Scopes
+** [ ] Extract functions so they can be used for functions (rbp, instead of rsp)
 * [ ] Implement boolean logic (a = 10 > 4, etc.)
 * [ ] Come up with easy syntax
 
