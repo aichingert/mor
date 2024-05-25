@@ -4,6 +4,7 @@ use crate::Token;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt<'s> {
     Local(Local<'s>),
+    Func(Func<'s>),
     Expr(Expr<'s>),
 }
 
@@ -25,6 +26,21 @@ impl<'l> Local<'l> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Func<'f> {
+    pub typ: Token<'f>,
+    pub name: &'f str,
+
+    pub args: Vec<Local<'f>>,
+    pub body: Block<'f>,
+}
+
+impl<'f> Func<'f> {
+    pub fn new(typ: Token<'f>, name: &'f str) -> Self {
+        Self { typ, name, args: Vec::new(), body: Vec::new() }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr<'e> {
     Number(&'e str),
 
@@ -33,9 +49,11 @@ pub enum Expr<'e> {
 
     If(Box<If<'e>>),
     While(Box<While<'e>>),
+    Return(Box<Expr<'e>>),
 
     SubExpr(Box<Expr<'e>>),
 
+    Call(Box<Call<'e>>),
     UnOp(Box<UnOpEx<'e>>),
     BiOp(Box<BiOpEx<'e>>),
 }
@@ -57,6 +75,12 @@ pub struct If<'i> {
 pub struct While<'w> {
     pub condition: Expr<'w>,
     pub body: Block<'w>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Call<'c> {
+    pub fun: Expr<'c>,
+    pub args: Vec<Expr<'c>>,
 }
 
 pub type Block<'b> = Vec<Stmt<'b>>;
@@ -177,6 +201,15 @@ pub fn print(stmt: &Stmt<'_>, ident: usize) {
                 println!();
             }
         }
+        Stmt::Func(fun) => {
+            println!("{id}{}(", fun.name);
+            for arg in &fun.args {
+                print(&Stmt::Local(arg.clone()), ident + 2);
+            }
+            println!("{id}){{");
+            fun.body.iter().for_each(|s| print(s, ident + 2));
+            println!("{id})}}");
+        }
     }
 }
 
@@ -210,6 +243,18 @@ pub fn print_ex(ex: &Expr<'_>, ident: usize) {
             println!("{id}}}");
         }
         Expr::SubExpr(sub) => print_ex(sub, ident),
+        Expr::Call(cl) => {
+            print_ex(&cl.fun, ident);
+            println!("{id}(");
+            for arg in &cl.args {
+                print_ex(&arg, ident + 2);
+            }
+            println!("{id})");
+        }
+        Expr::Return(ret) => {
+            println!("{id}return ");
+            print_ex(ret, ident + 2);
+        }
         Expr::BiOp(bi) => {
             let [a, b] = &bi.children;
             println!("{id}{{");

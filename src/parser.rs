@@ -44,6 +44,7 @@ pub enum Token<'t> {
     KwIf,
     KwElse,
     KwWhile,
+    KwReturn,
 
     // types
     I08Type,
@@ -190,6 +191,7 @@ impl<'t> Tokenizer<'t> {
                 "if" => return Some(Token::KwIf),
                 "else" => return Some(Token::KwElse),
                 "while" => return Some(Token::KwWhile),
+                "return" => return Some(Token::KwReturn),
 
                 // types
                 "i8" => return Some(Token::I08Type),
@@ -261,6 +263,7 @@ impl<'p, 't> Parser<'p, 't> {
             Token::Number(n) => return Some(Expr::Number(n)),
             Token::KwIf => return self.parse_if(),
             Token::KwWhile => return self.parse_while(),
+            Token::KwReturn => return Some(Expr::Return(Box::new(self.parse_expr(0)?))),
             Token::Paren('(') => {
                 let expr = self.parse_expr(0)?;
                 self.expect(&Token::Paren(')'));
@@ -314,15 +317,42 @@ impl<'p, 't> Parser<'p, 't> {
                 continue;
             }
 
+            if Token::Paren('(') == *cur {
+                self.next().unwrap();
+
+                let mut args = Vec::new();
+                while let Some(&at) = self.peek(0) {
+                    if Token::Semicolon == at {
+                        self.next().unwrap();
+                        continue;
+                    }
+                    if Token::Paren(')') == at {
+                        self.next().unwrap();
+                        break;
+                    }
+
+                    args.push(self.parse_expr(0)?);
+                }
+
+                res = Expr::Call(Box::new(Call {
+                    fun: res,
+                    args,
+                }));
+            }
+
             break;
         }
 
         Some(res)
     }
 
-    fn parse_var(&mut self) -> Option<Local<'t>> {
+    fn parse_var(&mut self) -> Option<Stmt<'t>> {
         let typ = self.next().copied();
         let name = self.expect_ident();
+
+        if let Some(Token::Paren('(')) = self.peek(0) {
+            return self.parse_fn(typ?, name);
+        }
 
         let mut size = None;
         if let Some(Token::Paren('[')) = self.peek(0) {
@@ -337,7 +367,32 @@ impl<'p, 't> Parser<'p, 't> {
             value = Some(self.parse_expr(0)?);
         }
 
-        Some(Local::new(name, size, typ, value))
+        Some(Stmt::Local(Local::new(name, size, typ, value)))
+    }
+
+    pub fn parse_fn(&mut self, typ: Token<'t>, name: &'t str) -> Option<Stmt<'t>> {
+        let mut func = Func::new(typ, name);
+
+        self.expect(&Token::Paren('('));
+
+        while let Some(&at) = self.peek(0) {
+            if Token::Semicolon == at {
+                self.next().unwrap();
+                continue;
+            }
+            if Token::Paren(')') == at {
+                self.next().unwrap();
+                break;
+            }
+
+            let Some(Stmt::Local(loc)) = self.parse_var() else { return None; };
+            func.args.push(loc);
+        }
+
+        self.expect(&Token::Paren('{'));
+        func.body = self.parse_block()?;
+
+        Some(Stmt::Func(func))
     }
 
     pub fn parse_if(&mut self) -> Option<Expr<'t>> {
@@ -387,7 +442,7 @@ impl<'p, 't> Parser<'p, 't> {
             }
 
             stmts.push(if at.try_type().is_some() {
-                Stmt::Local(self.parse_var()?)
+                self.parse_var()?
             } else {
                 Stmt::Expr(self.parse_expr(0)?)
             })

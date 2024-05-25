@@ -415,6 +415,8 @@ impl<'s> Compiler {
                 self.text.push(Opcode::u64(OpKind::Jmp("jmp".to_string(), format!("l{}", lbl))));
                 Opcode::u64(OpKind::Lbl(format!("l{}:", lbl + 1)))
             }
+            Expr::Call(call) => todo!(),
+            Expr::Return(ret) => todo!(),
         };
         self.text.push(opcode);
 
@@ -445,6 +447,7 @@ impl<'s> Compiler {
     fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Result<(), CompileError> {
         match stmt {
             Stmt::Expr(ex) => self.compile_expr(ex, 0),
+            Stmt::Func(fun) => todo!(),
             Stmt::Local(loc) => self.compile_local(loc),
         }
     }
