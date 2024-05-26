@@ -153,11 +153,11 @@ impl<'t> Tokenizer<'t> {
 
         let at = self.peek_ch(0)?;
 
+        println!("{}", at as char);
         match at as char {
             '+' => mk_tok!(Token::Plus),
             '-' => mk_tok!(Token::Minus),
             '*' => mk_tok!(Token::Star),
-            '/' => mk_tok!(Token::Slash),
             '|' => mk_tok2!(Token::Or, b'|', Token::BiOr),
             '&' => mk_tok2!(Token::And, b'&', Token::BiAnd),
             '>' => mk_tok2!(Token::Gt, b'=', Token::Ge),
@@ -167,7 +167,26 @@ impl<'t> Tokenizer<'t> {
             '(' | ')' | '{' | '}' | '[' | ']' => mk_tok!(Token::Paren(at as char)),
             ',' => mk_tok!(Token::Comma),
             ';' => mk_tok!(Token::Semicolon),
-            _ => (),
+            '/' => {
+                println!("here {:?}", self.peek_ch(1));
+                match self.peek_ch(1)? {
+        //self.consume_ch_while(|c| c == ' ' || c == '\n');
+                    b'/' => {
+                        self.consume_ch_while(|c| c != '\n');
+                        self.consume_ch(1);
+                    }
+                    b'*' => loop {
+                        self.consume_ch_while(|c| c != '*');
+
+                        if b'/' == self.peek_ch(0)? {
+                            self.consume_ch(1);
+                            break;
+                        }
+                    }
+                    _ => mk_tok!(Token::Slash),
+                }
+            }
+            _ => println!("not {}", at as char),
         }
 
         let src = self.cursor;
