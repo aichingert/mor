@@ -37,6 +37,7 @@ pub enum Token<'t> {
     // sp
     Paren(char),
     Comma,
+    Comment,
     Assign,
     Semicolon,
 
@@ -125,7 +126,9 @@ impl<'t> Tokenizer<'t> {
 
     fn run(&mut self) {
         while let Some(tok) = self.next_token() {
-            self.tokens.push(tok);
+            if Token::Comment != tok {
+                self.tokens.push(tok);
+            }
         }
     }
 
@@ -153,7 +156,6 @@ impl<'t> Tokenizer<'t> {
 
         let at = self.peek_ch(0)?;
 
-        println!("{}", at as char);
         match at as char {
             '+' => mk_tok!(Token::Plus),
             '-' => mk_tok!(Token::Minus),
@@ -168,9 +170,7 @@ impl<'t> Tokenizer<'t> {
             ',' => mk_tok!(Token::Comma),
             ';' => mk_tok!(Token::Semicolon),
             '/' => {
-                println!("here {:?}", self.peek_ch(1));
                 match self.peek_ch(1)? {
-        //self.consume_ch_while(|c| c == ' ' || c == '\n');
                     b'/' => {
                         self.consume_ch_while(|c| c != '\n');
                         self.consume_ch(1);
@@ -178,6 +178,7 @@ impl<'t> Tokenizer<'t> {
                     b'*' => loop {
                         self.consume_ch_while(|c| c != '*');
 
+                        self.consume_ch(1);
                         if b'/' == self.peek_ch(0)? {
                             self.consume_ch(1);
                             break;
@@ -185,6 +186,7 @@ impl<'t> Tokenizer<'t> {
                     }
                     _ => mk_tok!(Token::Slash),
                 }
+                return Some(Token::Comment);
             }
             _ => println!("not {}", at as char),
         }

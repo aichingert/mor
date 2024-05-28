@@ -25,6 +25,7 @@ fn main() -> std::io::Result<()> {
     //     / \
     //   10   2
     //
+
     let block = parse(source.as_bytes()).unwrap();
 
     for stmt in &block {
