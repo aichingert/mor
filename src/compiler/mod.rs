@@ -253,10 +253,7 @@ impl<'s> Compiler {
             Expr::Number(num) => Opcode::u64(
                 OpKind::Mov(
                     Operand::rax(),
-                    Operand::Immediate(
-                        num.parse()
-                            .map_err(|_| CompileError::new("Number too big"))?,
-                    ),
+                    Operand::Immediate(num),
                 ),
             ),
             Expr::Ident(ident) => {
@@ -487,7 +484,7 @@ impl<'s> Compiler {
             // ARRAY:
 
             // FIXME: has to be changed when working with other sizes
-            let mut val = size.parse::<i64>().map_err(|_| CompileError::new("invalid array size"))?;
+            let mut val = size;
             offset = (self.locals.len() as i64 + val) * 8;
             // FIXME: right sizes when the time comes
             self.rsp += val * 8;

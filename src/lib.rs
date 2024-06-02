@@ -1,8 +1,5 @@
-pub mod ast;
-pub use ast::*;
-
-pub mod parser;
-pub use parser::*;
+pub mod analyzer;
+pub use analyzer::*;
 
 pub mod compiler;
 pub use compiler::*;

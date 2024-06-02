@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::alg_opt::eval_const_stmt;
 
 pub struct Tokenizer<'t> {
     source: &'t [u8],
@@ -188,7 +189,7 @@ impl<'t> Tokenizer<'t> {
                 }
                 return Some(Token::Comment);
             }
-            _ => println!("not {}", at as char),
+            _ => (),
         }
 
         let src = self.cursor;
@@ -268,9 +269,9 @@ impl<'p, 't> Parser<'p, 't> {
         panic!("expected identifier");
     }
 
-    fn expect_num(&mut self) -> &'t str {
+    fn expect_num(&mut self) -> i64 {
         if let Some(Token::Number(num)) = self.next() {
-            return num;
+            return num.parse().unwrap();
         }
 
         panic!("expected number");
@@ -281,7 +282,7 @@ impl<'p, 't> Parser<'p, 't> {
 
         match tok {
             Token::Ident(id) => return Some(Expr::Ident(id)),
-            Token::Number(n) => return Some(Expr::Number(n)),
+            Token::Number(n) => return Some(Expr::Number(n.parse().ok()?)),
             Token::KwIf => return self.parse_if(),
             Token::KwWhile => return self.parse_while(),
             Token::KwReturn => return Some(Expr::Return(Box::new(self.parse_expr(0)?))),
@@ -476,5 +477,11 @@ impl<'p, 't> Parser<'p, 't> {
 pub fn parse(source: &[u8]) -> Option<Block<'_>> {
     let tokens = Tokenizer::tokenize(source);
     let mut p = Parser::new(&tokens);
-    p.parse_block()
+    Some(
+        p
+            .parse_block()?
+            .into_iter()
+            .map(eval_const_stmt)
+            .collect::<Vec<_>>()
+    )
 }

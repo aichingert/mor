@@ -11,7 +11,7 @@ pub enum Stmt<'s> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Local<'l> {
     pub name: &'l str,
-    pub size: Option<&'l str>,
+    pub size: Option<i64>,
 
     // TODO: support => auto x = Expr;
     pub typ: Option<Token<'l>>,
@@ -20,7 +20,7 @@ pub struct Local<'l> {
 }
 
 impl<'l> Local<'l> {
-    pub fn new(name: &'l str, size: Option<&'l str>, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
+    pub fn new(name: &'l str, size: Option<i64>, typ: Option<Token<'l>>, value: Option<Expr<'l>>) -> Self {
         Self { name, size, typ, value }
     }
 }
@@ -42,7 +42,7 @@ impl<'f> Func<'f> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr<'e> {
-    Number(&'e str),
+    Number(i64),
 
     Ident(&'e str),
     Index(Box<Index<'e>>),
