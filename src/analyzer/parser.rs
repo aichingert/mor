@@ -1,5 +1,4 @@
 use crate::ast::*;
-use crate::alg_opt::eval_const_stmt;
 
 pub struct Tokenizer<'t> {
     source: &'t [u8],
@@ -477,11 +476,5 @@ impl<'p, 't> Parser<'p, 't> {
 pub fn parse(source: &[u8]) -> Option<Block<'_>> {
     let tokens = Tokenizer::tokenize(source);
     let mut p = Parser::new(&tokens);
-    Some(
-        p
-            .parse_block()?
-            .into_iter()
-            .map(eval_const_stmt)
-            .collect::<Vec<_>>()
-    )
+    p.parse_block()
 }
