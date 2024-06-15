@@ -33,7 +33,7 @@ fn main() -> std::io::Result<()> {
         println!("=====");
     }
 
-    Compiler::compile(block).unwrap();
+    Compiler::compile(block);
 
     Ok(())
 }
