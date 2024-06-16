@@ -3,25 +3,14 @@
 :toclevels:
 aichingert
 
-the mor programming language, it was created to build a compiler as a hobby and develop my own programming language where I can play with the syntax as much as I want to be able to write consice and okayish performant programs.
+== TL;DR
 
-== todo:
+Mor is a programming language which I created just for fun and learning things with the goal of 0 dependencies and being self hosted in the future.
 
-* [x] Implement else expr
-* [x] Implement arrays
-* [x] Implement loops
-* [ ] Implement functions
-** functions need a complete compiler refactor
-** [ ] Implementing Scopes
-** [ ] Extract functions so they can be used for functions (rbp, instead of rsp)
-* [ ] Implement boolean logic (a = 10 > 4, etc.)
-* [ ] Come up with easy syntax
+== thinking
 
-== bug:
-
-* [ ] if has a few bugs with && and || precedence
-* [ ] when there is an if or another loop inside a loop then the labels will get messed up resulting in infinite loops
-* [ ] probably a few more lurking
+* currently deleted everything again so do it properly this time
+* make compile_expr, compile_func, etc. return a vec of opcodes so it can be tested and help for better extraction between functions and main block
 
 == far future
 
