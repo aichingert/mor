@@ -1,7 +1,7 @@
-use crate::{Compiler, Stmt, Local};
+use crate::{Compiler, Opcode, Stmt, Local};
 
 impl<'s> Compiler {
-    pub fn compile_stmt(&mut self, stmt: Stmt<'s>) {
+    pub fn compile_stmt(&mut self, stmt: Stmt<'s>) -> Vec<Opcode> {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
             Stmt::Func(func) => self.compile_func(func),
@@ -9,6 +9,7 @@ impl<'s> Compiler {
         }
     }
 
-    fn compile_local(&mut self, loc: Local<'s>) {
+    fn compile_local(&mut self, loc: Local<'s>) -> Vec<Opcode> {
+        vec![]
     }
 }

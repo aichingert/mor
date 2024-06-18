@@ -36,11 +36,6 @@ pub struct Compiler {
     func_lbl: i64,
 }
 
-pub const SET: u16 = 0x1;
-pub const OR:  u16 = 0x2;
-pub const AND: u16 = 0x4;
-pub const IDX: u16 = 0x8;
-
 impl<'s> Compiler {
     fn new() -> Self {
         Self {
