@@ -1,5 +1,0 @@
-i64 add(i64 a; i64 b; i64 c; i64 d; i64 e; i64 f; i64 g; i64 h) {
-    return (a + b);
-}
-
-add(1; 2)
