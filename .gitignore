@@ -1,6 +1,5 @@
-target/
-Cargo.lock
-
+.zig-cache
+zig-out
 
 # Added by cargo
 

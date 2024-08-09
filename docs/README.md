@@ -2,7 +2,9 @@
 
 the mor system including a programming language [morl](https://github.com/aichingert/mor/tree/main/morl) and operating system
 
-## mor
+## morl
+
+first iteration is going to be written in zig.
 
 this is a programming language to get familiar with writing my own compiler as well as to learn a bit of assembly and having its own linker
 
