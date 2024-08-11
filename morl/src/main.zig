@@ -1,5 +1,5 @@
 const std = @import("std");
-const lex = @import("lexer.zig");
+const Ast = @import("sema/Ast.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -17,9 +17,14 @@ pub fn main() !void {
         const buf = try file.readToEndAlloc(allocator, 4 * 1024 * 1024);
         defer allocator.free(buf);
 
-        var lexer = lex.Lexer.init(buf);
-        std.debug.print("{?}\n", .{lexer.next()});
-        std.debug.print("{s}", .{buf});
+        var ast = try Ast.init(allocator, buf);
+        defer ast.deinit(allocator);
+
+        for (ast.tokens.items(.tag)) |token| {
+            std.debug.print("{any}\n", .{token});
+        }
+
+        std.debug.print("{any}\n", .{ast});
     }
 }
 

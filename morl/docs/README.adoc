@@ -1,0 +1,27 @@
+= morl
+aichingert
+:icons: font
+:toc:
+:toclevels: 3
+:experimental:
+
+the mor programming language
+
+== syntax
+
+[source, mor]
+----
+
+hello :: fn() {
+    // println("hello")
+}
+
+// or
+
+hello : fn(void) void : fn() {
+    // println("hello")
+}
+
+----
+
+
