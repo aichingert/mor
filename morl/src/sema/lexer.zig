@@ -10,12 +10,13 @@ pub const Token = struct {
     };
 
     pub const Tag = enum {
+        number_lit,
+        string_lit,
         plus,
         minus,
         slash,
         asterisk,
         invalid,
-        number,
         eof,
     };
 };
@@ -34,8 +35,19 @@ pub const Lexer = struct {
     }
 
     fn is_number(self: *Self) bool {
-        return self.index < self.source.len and self.source[self.index] >= '0' and self.source[self.index] <= '9';
+        return self.index + 1 < self.source.len and self.source[self.index + 1] >= '0' and self.source[self.index + 1] <= '9';
     }
+
+    // zig fmt: off
+    fn is_string(self: *Self) bool {
+        return self.index + 1 < self.source.len and 
+            (self.source[self.index + 1] >= 'a' and self.source[self.index + 1] <= 'z')
+            or
+            (self.source[self.index + 1] >= 'A' and self.source[self.index + 1] <= 'Z')
+            or 
+            self.source[self.index + 1] == '_';
+    }
+    // zig fmt: on
 
     pub fn next(self: *Self) Token {
         var result: Token = .{
@@ -50,37 +62,43 @@ pub const Lexer = struct {
             switch (self.source[self.index]) {
                 '+' => {
                     result.tag = .plus;
-                    result.loc.end = self.index;
                     self.index += 1;
+                    result.loc.end = self.index;
                     return result;
                 },
                 '-' => {
                     result.tag = .minus;
-                    result.loc.end = self.index;
                     self.index += 1;
+                    result.loc.end = self.index;
                     return result;
                 },
                 '/' => {
                     result.tag = .slash;
-                    result.loc.end = self.index;
                     self.index += 1;
+                    result.loc.end = self.index;
                     return result;
                 },
                 '*' => {
                     result.tag = .asterisk;
-                    result.loc.end = self.index;
                     self.index += 1;
+                    result.loc.end = self.index;
                     return result;
                 },
                 '0'...'9' => {
                     while (self.is_number()) : (self.index += 1) {}
-                    result.tag = .number;
-                    result.loc.end = self.index - 1;
+                    result.tag = .number_lit;
+                    self.index += 1;
+                    result.loc.end = self.index;
                     return result;
                 },
-                ' ', '\n' => result.loc.start = self.index,
+                'a'...'z', 'A'...'Z' => {
+                    while (self.is_string()) : (self.index += 1) {}
+                    result.tag = .string_lit;
+                    result.loc.end = self.index;
+                    return result;
+                },
+                ' ', '\n' => result.loc.start = self.index + 1,
                 else => {
-                    std.debug.print("{d}\n", .{self.source[self.index]});
                     @panic("internal lexer panic");
                 },
             }

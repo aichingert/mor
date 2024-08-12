@@ -4,8 +4,9 @@ const Parser = @import("Parser.zig");
 
 const Self = @This();
 
-tokens: TokenList.Slice,
+source: []const u8,
 nodes: NodeList.Slice,
+tokens: TokenList.Slice,
 
 pub const TokenList = std.MultiArrayList(lex.Token);
 pub const NodeList = std.MultiArrayList(Node);
@@ -38,11 +39,12 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
         if (token.tag == .eof) break;
     }
 
-    var parser = Parser.init(gpa, tokens.items(.tag), tokens.items(.loc));
+    var parser = Parser.init(gpa, source, tokens.items(.tag), tokens.items(.loc));
     defer parser.deinit();
-    parser.parse();
+    try parser.parse();
 
     return .{
+        .source = source,
         .tokens = tokens.toOwnedSlice(),
         .nodes = parser.nodes.toOwnedSlice(),
     };

@@ -20,7 +20,8 @@ pub fn main() !void {
         var ast = try Ast.init(allocator, buf);
         defer ast.deinit(allocator);
 
-        for (ast.tokens.items(.tag)) |token| {
+        for (ast.tokens.items(.tag), 0..) |token, i| {
+            std.debug.print("{any}\n", .{ast.tokens.items(.loc)[i]});
             std.debug.print("{any}\n", .{token});
         }
 
