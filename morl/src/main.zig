@@ -20,12 +20,12 @@ pub fn main() !void {
         var ast = try Ast.init(allocator, buf);
         defer ast.deinit(allocator);
 
-        for (ast.tokens.items(.tag), 0..) |token, i| {
-            std.debug.print("{any}\n", .{ast.tokens.items(.loc)[i]});
-            std.debug.print("{any}\n", .{token});
-        }
+        for (ast.nodes.items(.tag), 0..) |tag, i| {
+            std.debug.print("{any}\n", .{tag});
 
-        std.debug.print("{any}\n", .{ast});
+            std.debug.print("  {any}\n", .{ast.nodes.items(.data)[i]});
+            std.debug.print("  {any}\n", .{ast.nodes.items(.main)[i]});
+        }
     }
 }
 

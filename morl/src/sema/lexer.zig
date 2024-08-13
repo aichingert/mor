@@ -18,6 +18,31 @@ pub const Token = struct {
         asterisk,
         invalid,
         eof,
+
+        pub fn isUnaryOp(self: Tag) bool {
+            return switch (self) {
+                .minus => true,
+                else => false,
+            };
+        }
+
+        pub fn isBinaryOp(self: Tag) bool {
+            return switch (self) {
+                .plus, .minus, .slash, .asterisk => true,
+                else => false,
+            };
+        }
+
+        pub fn precedence(self: Tag) u8 {
+            return switch (self) {
+                .minus, .plus => 10,
+                .slash, .asterisk => 20,
+                else => {
+                    std.debug.print("{any}\n", .{self});
+                    @panic("tag has no precedence");
+                },
+            };
+        }
     };
 };
 

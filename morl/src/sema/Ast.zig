@@ -13,17 +13,19 @@ pub const NodeList = std.MultiArrayList(Node);
 
 pub const Node = struct {
     tag: Tag,
-    main: u32,
+    main: usize,
     data: Data,
 
     const Data = struct {
-        lhs: u32,
-        rhs: u32,
+        lhs: usize,
+        rhs: usize,
     };
 
     const Tag = enum {
-        bi_op,
-        un_op,
+        number_literal,
+
+        unary_expression,
+        binary_expression,
     };
 };
 
