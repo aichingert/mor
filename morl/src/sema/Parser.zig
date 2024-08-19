@@ -33,6 +33,34 @@ pub fn deinit(self: *Self) void {
     self.nodes.deinit(self.gpa);
 }
 
+pub fn parse(self: *Self, prec: u8) !usize {
+    var node = try self.parsePrefix();
+
+    while (self.peekTag() != .eof) {
+        const tag = self.peekTag();
+
+        if (tag.isBinaryOp() and tag.precedence() >= prec) {
+            const binary = self.nextToken();
+            const rhs = try self.parse(tag.precedence());
+
+            node = try self.addNode(.{
+                .tag = .binary_expression,
+                .main = binary,
+                .data = .{
+                    .lhs = node,
+                    .rhs = rhs,
+                },
+            });
+
+            continue;
+        }
+
+        break;
+    }
+
+    return node;
+}
+
 fn peekTag(self: *Self) Token.Tag {
     return self.tok_tags[self.tok_i];
 }
@@ -47,60 +75,12 @@ fn addNode(self: *Self, node: Ast.Node) !usize {
     return self.nodes.len - 1;
 }
 
-pub fn parse(self: *Self) !void {
-    var stack = std.ArrayList(struct { prec: u32, node: usize }).init(self.gpa);
-    defer stack.deinit();
-
-    const node = try self.parsePrefix();
-
-    while (self.peekTag() != .eof) {
-        if (self.peekTag().isBinaryOp()) {
-            const binary = self.nextToken();
-            const rhs = try self.parsePrefix();
-
-            if (stack.items.len == 0) {
-                try stack.append(.{
-                    .prec = self.tok_tags[binary].precedence(),
-                    .node = try self.addNode(.{
-                        .tag = .binary_expression,
-                        .main = binary,
-                        .data = .{
-                            .lhs = node,
-                            .rhs = rhs,
-                        },
-                    }),
-                });
-            } else {
-                var prev = stack.pop();
-                const prec = self.tok_tags[binary].precedence();
-                while (prev.prec > prec and stack.items.len > 0) : (prev = stack.pop()) {}
-
-                try stack.append(.{
-                    .prec = prec,
-                    .node = try self.addNode(.{
-                        .tag = .binary_expression,
-                        .main = binary,
-                        .data = .{
-                            .lhs = prev.node,
-                            .rhs = rhs,
-                        },
-                    }),
-                });
-            }
-
-            continue;
-        }
-
-        @panic("only binary operations for now");
-    }
-}
-
 fn parsePrefix(self: *Self) !usize {
     self.checkIndexOutOfBounds("finding leading expr failed");
 
     switch (self.peekTag()) {
         .number_lit => return self.addNode(.{
-            .tag = .number_literal,
+            .tag = .number_expression,
             .main = self.nextToken(),
             .data = undefined,
         }),
