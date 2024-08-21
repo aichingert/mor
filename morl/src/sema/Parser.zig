@@ -33,7 +33,77 @@ pub fn deinit(self: *Self) void {
     self.nodes.deinit(self.gpa);
 }
 
-pub fn parse(self: *Self, prec: u8) !usize {
+fn peekTag(self: *Self) Token.Tag {
+    return self.tok_tags[self.tok_i];
+}
+
+fn nextToken(self: *Self) usize {
+    self.tok_i += 1;
+    return self.tok_i - 1;
+}
+
+fn expectNext(self: *Self, tag: Token.Tag) void {
+    if (self.tok_tags[self.nextToken()] != tag) {
+        std.debug.print("expected {any} got {any}\n", .{ tag, self.tok_tags[self.tok_i - 1] });
+        @panic("Expect next failed.");
+    }
+}
+
+fn checkIndexOutOfBounds(self: *Self, msg: []const u8) void {
+    if (self.tok_i >= self.tok_tags.len) @panic(msg);
+}
+
+fn addNode(self: *Self, node: Ast.Node) !usize {
+    try self.nodes.append(self.gpa, node);
+    return self.nodes.len - 1;
+}
+
+pub fn parse(self: *Self) !usize {
+    var latest: usize = 0;
+
+    while (self.peekTag() != .eof) {
+        latest = switch (self.peekTag()) {
+            .string_lit => try self.parseDeclare(),
+            else => {
+                std.debug.print("{any}\n", .{self.peekTag()});
+                @panic("expected string literal but got ^");
+            },
+        };
+    }
+
+    return latest;
+}
+
+fn parseDeclare(self: *Self) !usize {
+    const ident = self.nextToken();
+    self.expectNext(.colon);
+    const next = self.nextToken();
+
+    return switch (self.tok_tags[next]) {
+        .colon, .equal => try self.addNode(.{
+            .tag = if (self.tok_tags[next] == .colon) .constant_declare else .mutable_declare,
+            .main = undefined,
+            .data = .{
+                .lhs = ident,
+                .rhs = try self.parseDeclareExpression(),
+            },
+        }),
+        else => {
+            std.debug.print("{any}\n", .{self.tok_tags[next]});
+            @panic("expected constant or mutable declare but got ^");
+        },
+    };
+}
+
+fn parseDeclareExpression(self: *Self) !usize {
+    switch (self.peekTag()) {
+        .kw_fn => @panic("fn"),
+        .string_lit => @panic("str"),
+        else => return self.parseExpr(0),
+    }
+}
+
+pub fn parseExpr(self: *Self, prec: u8) !usize {
     var node = try self.parsePrefix();
 
     while (self.peekTag() != .eof) {
@@ -41,7 +111,7 @@ pub fn parse(self: *Self, prec: u8) !usize {
 
         if (tag.isBinaryOp() and tag.precedence() >= prec) {
             const binary = self.nextToken();
-            const rhs = try self.parse(tag.precedence());
+            const rhs = try self.parseExpr(tag.precedence());
 
             node = try self.addNode(.{
                 .tag = .binary_expression,
@@ -61,24 +131,11 @@ pub fn parse(self: *Self, prec: u8) !usize {
     return node;
 }
 
-fn peekTag(self: *Self) Token.Tag {
-    return self.tok_tags[self.tok_i];
-}
-
-fn nextToken(self: *Self) usize {
-    self.tok_i += 1;
-    return self.tok_i - 1;
-}
-
-fn addNode(self: *Self, node: Ast.Node) !usize {
-    try self.nodes.append(self.gpa, node);
-    return self.nodes.len - 1;
-}
-
 fn parsePrefix(self: *Self) !usize {
     self.checkIndexOutOfBounds("finding leading expr failed");
 
     switch (self.peekTag()) {
+        .string_lit => {},
         .number_lit => return self.addNode(.{
             .tag = .number_expression,
             .main = self.nextToken(),
@@ -103,8 +160,4 @@ fn parsePrefix(self: *Self) !usize {
 
     std.debug.print("{any}\n", .{self.peekTag()});
     @panic("should not get here");
-}
-
-fn checkIndexOutOfBounds(self: *Self, msg: []const u8) void {
-    if (self.tok_i >= self.tok_tags.len) @panic(msg);
 }

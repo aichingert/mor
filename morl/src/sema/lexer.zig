@@ -16,6 +16,12 @@ pub const Token = struct {
         minus,
         slash,
         asterisk,
+
+        equal,
+        colon,
+
+        kw_fn,
+
         invalid,
         eof,
 
@@ -59,9 +65,13 @@ pub const Lexer = struct {
         };
     }
 
+    // zig fmt: off
     fn is_number(self: *Self) bool {
-        return self.index + 1 < self.source.len and self.source[self.index + 1] >= '0' and self.source[self.index + 1] <= '9';
+        return self.index + 1 < self.source.len 
+            and self.source[self.index + 1] >= '0' 
+            and self.source[self.index + 1] <= '9';
     }
+    // zig fmt: on
 
     // zig fmt: off
     fn is_string(self: *Self) bool {
@@ -109,6 +119,18 @@ pub const Lexer = struct {
                     result.loc.end = self.index;
                     return result;
                 },
+                ':' => {
+                    result.tag = .colon;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
+                '=' => {
+                    result.tag = .equal;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
                 '0'...'9' => {
                     while (self.is_number()) : (self.index += 1) {}
                     result.tag = .number_lit;
@@ -119,6 +141,7 @@ pub const Lexer = struct {
                 'a'...'z', 'A'...'Z' => {
                     while (self.is_string()) : (self.index += 1) {}
                     result.tag = .string_lit;
+                    self.index += 1;
                     result.loc.end = self.index;
                     return result;
                 },
