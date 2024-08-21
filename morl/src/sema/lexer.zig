@@ -10,6 +10,7 @@ pub const Token = struct {
     };
 
     pub const Tag = enum {
+        identifier,
         number_lit,
         string_lit,
         plus,
@@ -71,10 +72,12 @@ pub const Lexer = struct {
             and self.source[self.index + 1] >= '0' 
             and self.source[self.index + 1] <= '9';
     }
-    // zig fmt: on
 
-    // zig fmt: off
-    fn is_string(self: *Self) bool {
+    fn is_within_string(self: *Self) bool {
+        return self.index < self.source.len and self.source[self.index] != '"';
+    }
+
+    fn is_identifier(self: *Self) bool {
         return self.index + 1 < self.source.len and 
             (self.source[self.index + 1] >= 'a' and self.source[self.index + 1] <= 'z')
             or
@@ -139,7 +142,16 @@ pub const Lexer = struct {
                     return result;
                 },
                 'a'...'z', 'A'...'Z' => {
-                    while (self.is_string()) : (self.index += 1) {}
+                    while (self.is_identifier()) : (self.index += 1) {}
+                    result.tag = .identifier;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
+                '"' => {
+                    self.index += 1;
+
+                    while (self.is_within_string()) : (self.index += 1) {}
                     result.tag = .string_lit;
                     self.index += 1;
                     result.loc.end = self.index;

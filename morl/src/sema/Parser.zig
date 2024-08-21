@@ -63,19 +63,20 @@ pub fn parse(self: *Self) !usize {
 
     while (self.peekTag() != .eof) {
         latest = switch (self.peekTag()) {
-            .string_lit => try self.parseDeclare(),
+            .identifier => try self.parseDeclare(),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
             },
         };
+        std.debug.print("{d}\n", .{latest});
     }
 
     return latest;
 }
 
 fn parseDeclare(self: *Self) !usize {
-    const ident = self.nextToken();
+    const ident = try self.parsePrefix();
     self.expectNext(.colon);
     const next = self.nextToken();
 
@@ -98,7 +99,7 @@ fn parseDeclare(self: *Self) !usize {
 fn parseDeclareExpression(self: *Self) !usize {
     switch (self.peekTag()) {
         .kw_fn => @panic("fn"),
-        .string_lit => @panic("str"),
+        .string_lit => return self.parsePrefix(),
         else => return self.parseExpr(0),
     }
 }
@@ -135,7 +136,16 @@ fn parsePrefix(self: *Self) !usize {
     self.checkIndexOutOfBounds("finding leading expr failed");
 
     switch (self.peekTag()) {
-        .string_lit => {},
+        .identifier => return self.addNode(.{
+            .tag = .identifier,
+            .main = self.nextToken(),
+            .data = undefined,
+        }),
+        .string_lit => return self.addNode(.{
+            .tag = .string_expression,
+            .main = self.nextToken(),
+            .data = undefined,
+        }),
         .number_lit => return self.addNode(.{
             .tag = .number_expression,
             .main = self.nextToken(),

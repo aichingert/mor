@@ -1,5 +1,7 @@
 const std = @import("std");
 const lex = @import("lexer.zig");
+const Lexer = lex.Lexer;
+const Token = lex.Token;
 const Parser = @import("Parser.zig");
 
 const Self = @This();
@@ -8,7 +10,7 @@ source: []const u8,
 nodes: NodeList.Slice,
 tokens: TokenList.Slice,
 
-pub const TokenList = std.MultiArrayList(lex.Token);
+pub const TokenList = std.MultiArrayList(Token);
 pub const NodeList = std.MultiArrayList(Node);
 
 pub const Node = struct {
@@ -22,7 +24,9 @@ pub const Node = struct {
     };
 
     const Tag = enum {
+        identifier,
         number_expression,
+        string_expression,
 
         unary_expression,
         binary_expression,
@@ -36,10 +40,11 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     var tokens = Self.TokenList{};
     defer tokens.deinit(gpa);
 
-    var lexer = lex.Lexer.init(source);
+    var lexer = Lexer.init(source);
 
     while (true) {
         const token = lexer.next();
+        std.debug.print("{any}\n", .{token.tag});
         try tokens.append(gpa, token);
         if (token.tag == .eof) break;
     }
@@ -48,6 +53,8 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     defer parser.deinit();
     const expr = try parser.parse();
 
+    print(9, 0, source, parser.nodes, tokens);
+    print(12, 0, source, parser.nodes, tokens);
     print(expr, 0, source, parser.nodes, tokens);
 
     return .{
@@ -91,16 +98,30 @@ pub fn print(idx: usize, indent: u8, source: []const u8, nodes: NodeList, tokens
             }
             std.debug.print("{d}\n", .{tokens.items(.loc)[nodes.items(.main)[idx]].end});
         },
+        .identifier => {
+            var i: u8 = 0;
+            while (i < indent) : (i += 1) {
+                std.debug.print(" ", .{});
+            }
+            const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
+            std.debug.print("{s}\n", .{source[loc.start..loc.end]});
+        },
+        .string_expression => {
+            var i: u8 = 0;
+            while (i < indent) : (i += 1) {
+                std.debug.print(" ", .{});
+            }
+            const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
+            std.debug.print("{s}\n", .{source[loc.start..loc.end]});
+        },
         .constant_declare => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
 
-            const loc = tokens.items(.loc)[nodes.items(.data)[idx].lhs];
-
-            std.debug.print("{s}\n", .{source[loc.start..loc.end]});
-            print(nodes.items(.data)[idx].rhs, indent + 2, source, nodes, tokens);
+            print(nodes.items(.data)[idx].lhs, indent + 2, source, nodes, tokens);
+            print(nodes.items(.data)[idx].rhs, indent + 4, source, nodes, tokens);
         },
         else => {},
     }
