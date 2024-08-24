@@ -1,10 +1,5 @@
-simple :: 
+simple :: -1 + 1*2311 - 34
 
--1
-+
-1*2311
-- 34
+lol := 123
 
-lol :: 123
-
-heh :: "hehs"
+he_he :: "hehs"

@@ -12,6 +12,7 @@ tok_locs: []const Token.Loc,
 
 source: []const u8,
 nodes: Ast.NodeList,
+funcs: std.ArrayList(usize),
 
 pub fn init(
     gpa: std.mem.Allocator,
@@ -25,6 +26,7 @@ pub fn init(
         .tok_tags = tok_tags,
         .tok_locs = tok_locs,
         .nodes = Ast.NodeList{},
+        .funcs = std.ArrayList(usize).init(gpa),
         .source = source,
     };
 }
@@ -45,6 +47,10 @@ fn nextToken(self: *Self) usize {
 fn expectNext(self: *Self, tag: Token.Tag) void {
     if (self.tok_tags[self.nextToken()] != tag) {
         std.debug.print("expected {any} got {any}\n", .{ tag, self.tok_tags[self.tok_i - 1] });
+        std.debug.print("error happened at {any}:{any}\n", .{
+            self.tok_locs[self.tok_i - 1].start,
+            self.tok_locs[self.tok_i - 1].end,
+        });
         @panic("Expect next failed.");
     }
 }
@@ -53,29 +59,28 @@ fn checkIndexOutOfBounds(self: *Self, msg: []const u8) void {
     if (self.tok_i >= self.tok_tags.len) @panic(msg);
 }
 
-fn addNode(self: *Self, node: Ast.Node) !usize {
+fn addNode(self: *Self, node: Ast.Node) std.mem.Allocator.Error!usize {
     try self.nodes.append(self.gpa, node);
     return self.nodes.len - 1;
 }
 
-pub fn parse(self: *Self) !usize {
-    var latest: usize = 0;
-
+pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
-        latest = switch (self.peekTag()) {
+        const last = switch (self.peekTag()) {
             .identifier => try self.parseDeclare(),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
             },
         };
-        std.debug.print("{d}\n", .{latest});
-    }
 
-    return latest;
+        if (self.nodes.items(.tag)[self.nodes.items(.data)[last].rhs] == .fn_body) {
+            std.debug.print("is a fn\n", .{});
+        }
+    }
 }
 
-fn parseDeclare(self: *Self) !usize {
+fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const ident = try self.parsePrefix();
     self.expectNext(.colon);
     const next = self.nextToken();
@@ -96,15 +101,68 @@ fn parseDeclare(self: *Self) !usize {
     };
 }
 
-fn parseDeclareExpression(self: *Self) !usize {
+fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
     switch (self.peekTag()) {
-        .kw_fn => @panic("fn"),
+        .kw_fn => return self.parseFunc(),
         .string_lit => return self.parsePrefix(),
         else => return self.parseExpr(0),
     }
 }
 
-pub fn parseExpr(self: *Self, prec: u8) !usize {
+// TODO: use actual types instead of identifiers
+fn parseFunc(self: *Self) !usize {
+    self.expectNext(.kw_fn);
+    self.expectNext(.lparen);
+
+    while (self.peekTag() == .identifier) {
+        const param = self.nextToken();
+        self.expectNext(.colon);
+        const param_type = self.nextToken();
+
+        if (self.peekTag() == .comma) {
+            self.expectNext(.comma);
+        }
+
+        _ = param;
+        _ = param_type;
+    }
+
+    self.expectNext(.rparen);
+
+    const fn_type = if (self.peekTag() == .identifier)
+        self.tok_tags[self.nextToken()]
+    else
+        .identifier;
+    _ = fn_type;
+
+    try self.parseFuncBody();
+
+    return 0;
+}
+
+fn parseFuncBody(self: *Self) std.mem.Allocator.Error!void {
+    self.expectNext(.lbrace);
+
+    while (self.peekTag() != .rbrace) {
+        var stmt: usize = 0;
+
+        switch (self.peekTag()) {
+            .kw_return => {
+                self.expectNext(.kw_return);
+                stmt = try self.parseExpr(0);
+            },
+            .identifier => stmt = try self.parseDeclare(),
+            else => {
+                std.debug.print("{any}\n", .{self.peekTag()});
+                @panic("expected string literal but got ^");
+            },
+        }
+    }
+
+    self.expectNext(.rbrace);
+}
+
+fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
     var node = try self.parsePrefix();
 
     while (self.peekTag() != .eof) {
@@ -132,7 +190,7 @@ pub fn parseExpr(self: *Self, prec: u8) !usize {
     return node;
 }
 
-fn parsePrefix(self: *Self) !usize {
+fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
     self.checkIndexOutOfBounds("finding leading expr failed");
 
     switch (self.peekTag()) {

@@ -6,8 +6,10 @@ const Parser = @import("Parser.zig");
 
 const Self = @This();
 
-source: []const u8,
 nodes: NodeList.Slice,
+funcs: std.ArrayList(usize),
+
+source: []const u8,
 tokens: TokenList.Slice,
 
 pub const TokenList = std.MultiArrayList(Token);
@@ -33,6 +35,8 @@ pub const Node = struct {
 
         constant_declare,
         mutable_declare,
+
+        fn_body,
     };
 };
 
@@ -51,16 +55,17 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
 
     var parser = Parser.init(gpa, source, tokens.items(.tag), tokens.items(.loc));
     defer parser.deinit();
-    const expr = try parser.parse();
+    try parser.parse();
 
-    print(9, 0, source, parser.nodes, tokens);
-    print(12, 0, source, parser.nodes, tokens);
-    print(expr, 0, source, parser.nodes, tokens);
+    //print(9, 0, source, parser.nodes, tokens);
+    //print(12, 0, source, parser.nodes, tokens);
+    //print(15 , 0, source, parser.nodes, tokens);
 
     return .{
         .source = source,
         .tokens = tokens.toOwnedSlice(),
         .nodes = parser.nodes.toOwnedSlice(),
+        .funcs = parser.funcs,
     };
 }
 

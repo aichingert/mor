@@ -18,10 +18,19 @@ pub const Token = struct {
         slash,
         asterisk,
 
+        lparen,
+        rparen,
+        lbrace,
+        rbrace,
+        lbracket,
+        rbracket,
+
         equal,
         colon,
+        comma,
 
         kw_fn,
+        kw_return,
 
         invalid,
         eof,
@@ -83,7 +92,7 @@ pub const Lexer = struct {
             or
             (self.source[self.index + 1] >= 'A' and self.source[self.index + 1] <= 'Z')
             or 
-            self.source[self.index + 1] == '_';
+            self.source[self.index + 1] == '_' or self.is_number();
     }
     // zig fmt: on
 
@@ -134,16 +143,15 @@ pub const Lexer = struct {
                     result.loc.end = self.index;
                     return result;
                 },
-                '0'...'9' => {
-                    while (self.is_number()) : (self.index += 1) {}
-                    result.tag = .number_lit;
+                ',' => {
+                    result.tag = .comma;
                     self.index += 1;
                     result.loc.end = self.index;
                     return result;
                 },
-                'a'...'z', 'A'...'Z' => {
-                    while (self.is_identifier()) : (self.index += 1) {}
-                    result.tag = .identifier;
+                '0'...'9' => {
+                    while (self.is_number()) : (self.index += 1) {}
+                    result.tag = .number_lit;
                     self.index += 1;
                     result.loc.end = self.index;
                     return result;
@@ -157,8 +165,49 @@ pub const Lexer = struct {
                     result.loc.end = self.index;
                     return result;
                 },
+                '(' => {
+                    result.tag = .lparen;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
+                ')' => {
+                    result.tag = .rparen;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
+                '{' => {
+                    result.tag = .lbrace;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
+                '}' => {
+                    result.tag = .rbrace;
+                    self.index += 1;
+                    result.loc.end = self.index;
+                    return result;
+                },
                 ' ', '\n' => result.loc.start = self.index + 1,
+                'a'...'z', 'A'...'Z' => {
+                    while (self.is_identifier()) : (self.index += 1) {}
+                    result.tag = .identifier;
+                    self.index += 1;
+                    result.loc.end = self.index;
+
+                    const eql = std.mem.eql;
+
+                    if (eql(u8, self.source[result.loc.start..result.loc.end], "fn")) {
+                        result.tag = .kw_fn;
+                    } else if (eql(u8, self.source[result.loc.start..result.loc.end], "return")) {
+                        result.tag = .kw_return;
+                    }
+
+                    return result;
+                },
                 else => {
+                    std.debug.print("{any}\n", .{self.source[self.index]});
                     @panic("internal lexer panic");
                 },
             }
