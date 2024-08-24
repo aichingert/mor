@@ -7,13 +7,14 @@ const Parser = @import("Parser.zig");
 const Self = @This();
 
 nodes: NodeList.Slice,
-funcs: std.ArrayList(usize),
+funcs: FuncList.Slice,
 
 source: []const u8,
 tokens: TokenList.Slice,
 
-pub const TokenList = std.MultiArrayList(Token);
 pub const NodeList = std.MultiArrayList(Node);
+pub const FuncList = std.MultiArrayList(Func);
+pub const TokenList = std.MultiArrayList(Token);
 
 pub const Node = struct {
     tag: Tag,
@@ -33,11 +34,18 @@ pub const Node = struct {
         unary_expression,
         binary_expression,
 
-        constant_declare,
         mutable_declare,
-
-        fn_body,
+        constant_declare,
+        function_declare,
     };
+};
+
+pub const Func = struct {
+    node: usize,
+    args: NodeList.Slice,
+    body: NodeList.Slice,
+
+    return_type: Token.Tag,
 };
 
 pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!Self {
@@ -58,14 +66,13 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     try parser.parse();
 
     //print(9, 0, source, parser.nodes, tokens);
-    //print(12, 0, source, parser.nodes, tokens);
-    //print(15 , 0, source, parser.nodes, tokens);
+    //print(15, 0, source, parser.nodes, tokens);
 
     return .{
         .source = source,
         .tokens = tokens.toOwnedSlice(),
         .nodes = parser.nodes.toOwnedSlice(),
-        .funcs = parser.funcs,
+        .funcs = parser.funcs.toOwnedSlice(),
     };
 }
 

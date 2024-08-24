@@ -96,6 +96,18 @@ pub const Lexer = struct {
     }
     // zig fmt: on
 
+    fn genToken(self: *Self, tag: Token.Tag, start: usize) Token {
+        self.index += 1;
+
+        return .{
+            .tag = tag,
+            .loc = .{
+                .start = start,
+                .end = self.index,
+            },
+        };
+    }
+
     pub fn next(self: *Self) Token {
         var result: Token = .{
             .tag = .eof,
@@ -106,111 +118,50 @@ pub const Lexer = struct {
         };
 
         while (self.index < self.source.len) : (self.index += 1) {
-            switch (self.source[self.index]) {
-                '+' => {
-                    result.tag = .plus;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                '-' => {
-                    result.tag = .minus;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                '/' => {
-                    result.tag = .slash;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                '*' => {
-                    result.tag = .asterisk;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                ':' => {
-                    result.tag = .colon;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                '=' => {
-                    result.tag = .equal;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                ',' => {
-                    result.tag = .comma;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
+            return switch (self.source[self.index]) {
+                '+' => self.genToken(.plus, result.loc.start),
+                '-' => self.genToken(.minus, result.loc.start),
+                '/' => self.genToken(.slash, result.loc.start),
+                '*' => self.genToken(.asterisk, result.loc.start),
+                ':' => self.genToken(.colon, result.loc.start),
+                '=' => self.genToken(.equal, result.loc.start),
+                ',' => self.genToken(.comma, result.loc.start),
+                '(' => self.genToken(.lparen, result.loc.start),
+                ')' => self.genToken(.rparen, result.loc.start),
+                '{' => self.genToken(.lbrace, result.loc.start),
+                '}' => self.genToken(.rbrace, result.loc.start),
                 '0'...'9' => {
                     while (self.is_number()) : (self.index += 1) {}
-                    result.tag = .number_lit;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
+                    return self.genToken(.number_lit, result.loc.start);
                 },
                 '"' => {
                     self.index += 1;
 
                     while (self.is_within_string()) : (self.index += 1) {}
-                    result.tag = .string_lit;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
+                    return self.genToken(.string_lit, result.loc.start);
                 },
-                '(' => {
-                    result.tag = .lparen;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                ')' => {
-                    result.tag = .rparen;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                '{' => {
-                    result.tag = .lbrace;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                '}' => {
-                    result.tag = .rbrace;
-                    self.index += 1;
-                    result.loc.end = self.index;
-                    return result;
-                },
-                ' ', '\n' => result.loc.start = self.index + 1,
                 'a'...'z', 'A'...'Z' => {
                     while (self.is_identifier()) : (self.index += 1) {}
-                    result.tag = .identifier;
-                    self.index += 1;
-                    result.loc.end = self.index;
-
+                    var token = self.genToken(.identifier, result.loc.start);
                     const eql = std.mem.eql;
 
-                    if (eql(u8, self.source[result.loc.start..result.loc.end], "fn")) {
-                        result.tag = .kw_fn;
-                    } else if (eql(u8, self.source[result.loc.start..result.loc.end], "return")) {
-                        result.tag = .kw_return;
+                    if (eql(u8, self.source[token.loc.start..token.loc.end], "fn")) {
+                        token.tag = .kw_fn;
+                    } else if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
+                        token.tag = .kw_return;
                     }
 
-                    return result;
+                    return token;
+                },
+                ' ', '\n' => {
+                    result.loc.start = self.index + 1;
+                    continue;
                 },
                 else => {
                     std.debug.print("{any}\n", .{self.source[self.index]});
                     @panic("internal lexer panic");
                 },
-            }
+            };
         }
 
         return result;

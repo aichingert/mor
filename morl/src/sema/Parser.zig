@@ -12,7 +12,7 @@ tok_locs: []const Token.Loc,
 
 source: []const u8,
 nodes: Ast.NodeList,
-funcs: std.ArrayList(usize),
+funcs: Ast.FuncList,
 
 pub fn init(
     gpa: std.mem.Allocator,
@@ -26,7 +26,7 @@ pub fn init(
         .tok_tags = tok_tags,
         .tok_locs = tok_locs,
         .nodes = Ast.NodeList{},
-        .funcs = std.ArrayList(usize).init(gpa),
+        .funcs = Ast.FuncList{},
         .source = source,
     };
 }
@@ -66,16 +66,12 @@ fn addNode(self: *Self, node: Ast.Node) std.mem.Allocator.Error!usize {
 
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
-        const last = switch (self.peekTag()) {
-            .identifier => try self.parseDeclare(),
+        switch (self.peekTag()) {
+            .identifier => _ = try self.parseDeclare(),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
             },
-        };
-
-        if (self.nodes.items(.tag)[self.nodes.items(.data)[last].rhs] == .fn_body) {
-            std.debug.print("is a fn\n", .{});
         }
     }
 }
@@ -85,20 +81,29 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     self.expectNext(.colon);
     const next = self.nextToken();
 
-    return switch (self.tok_tags[next]) {
-        .colon, .equal => try self.addNode(.{
-            .tag = if (self.tok_tags[next] == .colon) .constant_declare else .mutable_declare,
-            .main = undefined,
-            .data = .{
-                .lhs = ident,
-                .rhs = try self.parseDeclareExpression(),
-            },
-        }),
+    switch (self.tok_tags[next]) {
+        .colon, .equal => {
+            const expr = try self.parseDeclareExpression();
+
+            if (self.nodes.items(.tag)[expr] == .function_declare) {
+                self.nodes.items(.data)[expr].lhs = ident;
+                return expr;
+            }
+
+            return try self.addNode(.{
+                .tag = if (self.tok_tags[next] == .colon) .constant_declare else .mutable_declare,
+                .main = undefined,
+                .data = .{
+                    .lhs = ident,
+                    .rhs = expr,
+                },
+            });
+        },
         else => {
             std.debug.print("{any}\n", .{self.tok_tags[next]});
             @panic("expected constant or mutable declare but got ^");
         },
-    };
+    }
 }
 
 fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
@@ -121,6 +126,8 @@ fn parseFunc(self: *Self) !usize {
 
         if (self.peekTag() == .comma) {
             self.expectNext(.comma);
+        } else {
+            break;
         }
 
         _ = param;
