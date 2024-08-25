@@ -28,6 +28,7 @@ pub const Token = struct {
         equal,
         colon,
         comma,
+        semicolon,
 
         kw_fn,
         kw_return,
@@ -124,6 +125,7 @@ pub const Lexer = struct {
                 '/' => self.genToken(.slash, result.loc.start),
                 '*' => self.genToken(.asterisk, result.loc.start),
                 ':' => self.genToken(.colon, result.loc.start),
+                ';' => self.genToken(.semicolon, result.loc.start),
                 '=' => self.genToken(.equal, result.loc.start),
                 ',' => self.genToken(.comma, result.loc.start),
                 '(' => self.genToken(.lparen, result.loc.start),

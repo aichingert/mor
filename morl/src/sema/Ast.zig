@@ -8,6 +8,7 @@ const Self = @This();
 
 nodes: NodeList.Slice,
 funcs: FuncList.Slice,
+stmts: std.ArrayList(usize),
 
 source: []const u8,
 tokens: TokenList.Slice,
@@ -34,6 +35,7 @@ pub const Node = struct {
         unary_expression,
         binary_expression,
 
+        type_declare,
         mutable_declare,
         constant_declare,
         function_declare,
@@ -41,9 +43,8 @@ pub const Node = struct {
 };
 
 pub const Func = struct {
-    node: usize,
-    args: NodeList.Slice,
-    body: NodeList.Slice,
+    args: std.ArrayList(usize),
+    body: std.ArrayList(usize),
 
     return_type: Token.Tag,
 };
@@ -65,12 +66,18 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     defer parser.deinit();
     try parser.parse();
 
+    for (parser.stmts.items) |item| {
+        std.debug.print("{d}\n", .{item});
+    }
+
     //print(9, 0, source, parser.nodes, tokens);
+    //print(12, 0, source, parser.nodes, tokens);
     //print(15, 0, source, parser.nodes, tokens);
 
     return .{
         .source = source,
         .tokens = tokens.toOwnedSlice(),
+        .stmts = parser.stmts,
         .nodes = parser.nodes.toOwnedSlice(),
         .funcs = parser.funcs.toOwnedSlice(),
     };
@@ -135,12 +142,14 @@ pub fn print(idx: usize, indent: u8, source: []const u8, nodes: NodeList, tokens
             print(nodes.items(.data)[idx].lhs, indent + 2, source, nodes, tokens);
             print(nodes.items(.data)[idx].rhs, indent + 4, source, nodes, tokens);
         },
-        else => {},
+        else => std.debug.print("{any}\n", .{nodes.items(.tag)[idx]}),
     }
 }
 
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-    self.tokens.deinit(gpa);
+    self.stmts.deinit();
     self.nodes.deinit(gpa);
+    self.funcs.deinit(gpa);
+    self.tokens.deinit(gpa);
     self.* = undefined;
 }

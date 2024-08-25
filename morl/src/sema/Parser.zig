@@ -13,6 +13,7 @@ tok_locs: []const Token.Loc,
 source: []const u8,
 nodes: Ast.NodeList,
 funcs: Ast.FuncList,
+stmts: std.ArrayList(usize),
 
 pub fn init(
     gpa: std.mem.Allocator,
@@ -27,6 +28,7 @@ pub fn init(
         .tok_locs = tok_locs,
         .nodes = Ast.NodeList{},
         .funcs = Ast.FuncList{},
+        .stmts = std.ArrayList(usize).init(gpa),
         .source = source,
     };
 }
@@ -64,21 +66,32 @@ fn addNode(self: *Self, node: Ast.Node) std.mem.Allocator.Error!usize {
     return self.nodes.len - 1;
 }
 
+fn addFunc(self: *Self, func: Ast.Func) std.mem.Allocator.Error!usize {
+    try self.funcs.append(self.gpa, func);
+    return self.funcs.len - 1;
+}
+
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
-        switch (self.peekTag()) {
-            .identifier => _ = try self.parseDeclare(),
+        try self.stmts.append(switch (self.peekTag()) {
+            .identifier => try self.parseDeclare(),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
             },
-        }
+        });
     }
 }
 
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const ident = try self.parsePrefix();
     self.expectNext(.colon);
+    var type_ident: i32 = -1;
+
+    if (self.peekTag() == .identifier) {
+        type_ident = @as(i32, @intCast(self.nextToken()));
+    }
+
     const next = self.nextToken();
 
     switch (self.tok_tags[next]) {
@@ -90,12 +103,25 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
                 return expr;
             }
 
-            return try self.addNode(.{
+            return self.addNode(.{
                 .tag = if (self.tok_tags[next] == .colon) .constant_declare else .mutable_declare,
                 .main = undefined,
                 .data = .{
                     .lhs = ident,
                     .rhs = expr,
+                },
+            });
+        },
+        .semicolon => {
+            // TODO: create own error types
+            if (type_ident == 0) return std.mem.Allocator.Error.OutOfMemory;
+
+            return self.addNode(.{
+                .tag = .type_declare,
+                .main = undefined,
+                .data = .{
+                    .lhs = ident,
+                    .rhs = @intCast(type_ident),
                 },
             });
         },
@@ -116,6 +142,12 @@ fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
 
 // TODO: use actual types instead of identifiers
 fn parseFunc(self: *Self) !usize {
+    var args = std.ArrayList(usize).init(self.gpa);
+    const body = std.ArrayList(usize).init(self.gpa);
+
+    defer args.deinit();
+    defer body.deinit();
+
     self.expectNext(.kw_fn);
     self.expectNext(.lparen);
 
@@ -124,14 +156,20 @@ fn parseFunc(self: *Self) !usize {
         self.expectNext(.colon);
         const param_type = self.nextToken();
 
+        try args.append(try self.addNode(.{
+            .tag = .type_declare,
+            .main = undefined,
+            .data = .{
+                .lhs = param,
+                .rhs = param_type,
+            },
+        }));
+
         if (self.peekTag() == .comma) {
             self.expectNext(.comma);
         } else {
             break;
         }
-
-        _ = param;
-        _ = param_type;
     }
 
     self.expectNext(.rparen);
@@ -144,7 +182,18 @@ fn parseFunc(self: *Self) !usize {
 
     try self.parseFuncBody();
 
-    return 0;
+    return self.addNode(.{
+        .tag = .function_declare,
+        .main = undefined,
+        .data = .{
+            .lhs = 0,
+            .rhs = try self.addFunc(.{
+                .args = args,
+                .body = body,
+                .return_type = .identifier,
+            }),
+        },
+    });
 }
 
 fn parseFuncBody(self: *Self) std.mem.Allocator.Error!void {
