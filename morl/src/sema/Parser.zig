@@ -114,7 +114,7 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
         },
         .semicolon => {
             // TODO: create own error types
-            if (type_ident == 0) return std.mem.Allocator.Error.OutOfMemory;
+            if (type_ident == -1) return std.mem.Allocator.Error.OutOfMemory;
 
             return self.addNode(.{
                 .tag = .type_declare,
@@ -143,10 +143,6 @@ fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
 // TODO: use actual types instead of identifiers
 fn parseFunc(self: *Self) !usize {
     var args = std.ArrayList(usize).init(self.gpa);
-    const body = std.ArrayList(usize).init(self.gpa);
-
-    defer args.deinit();
-    defer body.deinit();
 
     self.expectNext(.kw_fn);
     self.expectNext(.lparen);
@@ -174,13 +170,13 @@ fn parseFunc(self: *Self) !usize {
 
     self.expectNext(.rparen);
 
-    const fn_type = if (self.peekTag() == .identifier)
+    const return_type = if (self.peekTag() == .identifier)
         self.tok_tags[self.nextToken()]
     else
+        // TODO: replace with void type
         .identifier;
-    _ = fn_type;
 
-    try self.parseFuncBody();
+    const body = try self.parseFuncBody();
 
     return self.addNode(.{
         .tag = .function_declare,
@@ -190,24 +186,24 @@ fn parseFunc(self: *Self) !usize {
             .rhs = try self.addFunc(.{
                 .args = args,
                 .body = body,
-                .return_type = .identifier,
+                .return_type = return_type,
             }),
         },
     });
 }
 
-fn parseFuncBody(self: *Self) std.mem.Allocator.Error!void {
+fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
+    var body = std.ArrayList(usize).init(self.gpa);
     self.expectNext(.lbrace);
 
     while (self.peekTag() != .rbrace) {
-        var stmt: usize = 0;
-
         switch (self.peekTag()) {
             .kw_return => {
+                // TODO: add return expr
                 self.expectNext(.kw_return);
-                stmt = try self.parseExpr(0);
+                try body.append(try self.parseExpr(0));
             },
-            .identifier => stmt = try self.parseDeclare(),
+            .identifier => try body.append(try self.parseDeclare()),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
@@ -216,6 +212,7 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!void {
     }
 
     self.expectNext(.rbrace);
+    return body;
 }
 
 fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {

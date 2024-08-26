@@ -67,12 +67,9 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     try parser.parse();
 
     for (parser.stmts.items) |item| {
-        std.debug.print("{d}\n", .{item});
+        std.debug.print("item: {d}\n", .{item});
+        print(item, 0, source, parser.nodes, tokens);
     }
-
-    //print(9, 0, source, parser.nodes, tokens);
-    //print(12, 0, source, parser.nodes, tokens);
-    //print(15, 0, source, parser.nodes, tokens);
 
     return .{
         .source = source,
@@ -90,18 +87,15 @@ pub fn print(idx: usize, indent: u8, source: []const u8, nodes: NodeList, tokens
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-
             std.debug.print("{any}\n", .{tokens.items(.tag)[nodes.items(.main)[idx]]});
             print(nodes.items(.data)[idx].lhs, indent, source, nodes, tokens);
         },
         .binary_expression => {
             print(nodes.items(.data)[idx].lhs, indent + 2, source, nodes, tokens);
-
             var i: u8 = 0;
-            while (i < indent + 2) : (i += 1) {
+            while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-
             std.debug.print("{any}\n", .{tokens.items(.tag)[nodes.items(.main)[idx]]});
             print(nodes.items(.data)[idx].rhs, indent + 2, source, nodes, tokens);
         },
@@ -110,18 +104,16 @@ pub fn print(idx: usize, indent: u8, source: []const u8, nodes: NodeList, tokens
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-            std.debug.print("{d}\n", .{tokens.items(.loc)[nodes.items(.main)[idx]].start});
-            i = 0;
-            while (i < indent) : (i += 1) {
-                std.debug.print(" ", .{});
-            }
-            std.debug.print("{d}\n", .{tokens.items(.loc)[nodes.items(.main)[idx]].end});
+
+            const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
+            std.debug.print("{s} [{}-{}]\n", .{ source[loc.start..loc.end], loc.start, loc.end });
         },
         .identifier => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
+
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
             std.debug.print("{s}\n", .{source[loc.start..loc.end]});
         },
@@ -130,14 +122,37 @@ pub fn print(idx: usize, indent: u8, source: []const u8, nodes: NodeList, tokens
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
+
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
             std.debug.print("{s}\n", .{source[loc.start..loc.end]});
+        },
+        .type_declare => {
+            print(nodes.items(.data)[idx].lhs, indent + 4, source, nodes, tokens);
+
+            var i: u8 = 0;
+            while (i < indent) : (i += 1) {
+                std.debug.print(" ", .{});
+            }
+            std.debug.print(" : \n", .{});
+
+            print(nodes.items(.data)[idx].rhs, indent + 4, source, nodes, tokens);
         },
         .constant_declare => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
+            std.debug.print("const \n", .{});
+
+            print(nodes.items(.data)[idx].lhs, indent + 2, source, nodes, tokens);
+            print(nodes.items(.data)[idx].rhs, indent + 4, source, nodes, tokens);
+        },
+        .mutable_declare => {
+            var i: u8 = 0;
+            while (i < indent) : (i += 1) {
+                std.debug.print(" ", .{});
+            }
+            std.debug.print("mut  \n", .{});
 
             print(nodes.items(.data)[idx].lhs, indent + 2, source, nodes, tokens);
             print(nodes.items(.data)[idx].rhs, indent + 4, source, nodes, tokens);
@@ -149,6 +164,12 @@ pub fn print(idx: usize, indent: u8, source: []const u8, nodes: NodeList, tokens
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     self.stmts.deinit();
     self.nodes.deinit(gpa);
+
+    for (self.funcs.items(.args), 0..) |_, i| {
+        self.funcs.items(.args)[i].deinit();
+        self.funcs.items(.body)[i].deinit();
+    }
+
     self.funcs.deinit(gpa);
     self.tokens.deinit(gpa);
     self.* = undefined;
