@@ -1,5 +1,6 @@
 const std = @import("std");
 const Ast = @import("sema/Ast.zig");
+const Mir = @import("sema/Mir.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -14,11 +15,14 @@ pub fn main() !void {
         var file = try std.fs.cwd().openFile(arg, .{});
         defer file.close();
 
-        const buf = try file.readToEndAlloc(allocator, 4 * 1024 * 1024);
-        defer allocator.free(buf);
+        const source = try file.readToEndAlloc(allocator, 4 * 1024 * 1024);
+        defer allocator.free(source);
 
-        var ast = try Ast.init(allocator, buf);
+        var ast = try Ast.init(allocator, source);
         defer ast.deinit(allocator);
+
+        var mir = Mir.init(allocator, ast);
+        defer mir.deinit(allocator);
 
         //for (ast.nodes.items(.tag), 0..) |tag, i| {
         //    std.debug.print("{any}\n", .{tag});
