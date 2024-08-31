@@ -24,14 +24,9 @@ pub fn main() !void {
         var mir = Mir.init(allocator, ast);
         defer mir.deinit(allocator);
 
-        //for (ast.nodes.items(.tag), 0..) |tag, i| {
-        //    std.debug.print("{any}\n", .{tag});
-
-        //    const idx = ast.nodes.items(.main)[i];
-        //    const tok = ast.tokens.items(.tag)[idx];
-        //    std.debug.print("  {any}\n", .{tok});
-        //    std.debug.print("  {any}\n", .{ast.nodes.items(.data)[i]});
-        //}
+        for (mir.instructions.items(.tag)) |tag| {
+            std.debug.print("{any}\n", .{tag});
+        }
     }
 }
 
