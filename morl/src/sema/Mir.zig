@@ -11,11 +11,11 @@ const Self = @This();
 gpa: std.mem.Allocator,
 instructions: InstrList.Slice,
 
-const Operand = struct {
+pub const Operand = struct {
     kind: Kind,
 
-    const Register = enum {
-        R0,
+    const Register = enum(u8) {
+        R0 = 0,
         R1,
         R2,
         R3,
@@ -36,17 +36,36 @@ const Operand = struct {
         immediate: i64,
         indexed: std.meta.Tuple(&[_]type{ Register, *Kind }),
     };
+
+    pub fn print(self: Operand, nl: bool) void {
+        switch (self.kind) {
+            .reg => |r| std.debug.print("{s}", .{std.enums.tagName(Register, r).?}),
+            .val => |r| std.debug.print("[{s}]", .{std.enums.tagName(Register, r).?}),
+            .indexed => @panic("TODO: printing indexed"),
+            .immediate => |v| std.debug.print("{d}", .{v}),
+        }
+
+        if (nl) std.debug.print("\n", .{});
+    }
 };
 
-const Instr = struct {
+pub const Instr = struct {
     tag: Tag,
+    data: Data,
 
-    const Tag = enum {
+    const Data = struct {
+        lhs: Operand,
+        rhs: Operand,
+    };
+
+    pub const Tag = enum {
         neg,
         add,
         sub,
         div,
         mul,
+        mov,
+        lbl,
         jmp,
         ret,
         call,
@@ -56,11 +75,11 @@ const Instr = struct {
     };
 };
 
-pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
+pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
     var instructions = InstrList{};
 
     for (ast.stmts.items) |item| {
-        genInstructionsFromStatement(&instructions, &ast, item);
+        try genInstructionsFromStatement(&ast, gpa, item, &instructions);
     }
 
     return .{
@@ -69,17 +88,24 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
     };
 }
 
-fn genInstructionsFromStatement(instructions: *InstrList, ast: *const Ast, stmt: usize) void {
+fn genInstructionsFromStatement(
+    ast: *const Ast,
+    gpa: std.mem.Allocator,
+    stmt: usize,
+    instructions: *InstrList,
+) !void {
     const data = ast.nodes.items(.data)[stmt];
 
     switch (ast.nodes.items(.tag)[stmt]) {
-        .mutable_declare => genInstructionsFromExpression(instructions, ast, data.rhs),
-        .constant_declare => genInstructionsFromExpression(instructions, ast, data.rhs),
+        .mutable_declare, .constant_declare => {
+            const result = try genInstructionsFromExpression(0, ast, gpa, data.rhs, instructions);
+            std.debug.print("result: {any}\n", .{result});
+        },
         .function_declare => {
             // TODO: function specific stuff
 
             for (ast.funcs.items(.body)[data.lhs].items) |fstmt| {
-                genInstructionsFromStatement(instructions, ast, fstmt);
+                try genInstructionsFromStatement(ast, gpa, fstmt, instructions);
             }
 
             std.debug.print("Function declare\n", .{});
@@ -91,16 +117,68 @@ fn genInstructionsFromStatement(instructions: *InstrList, ast: *const Ast, stmt:
     }
 }
 
-fn genInstructionsFromExpression(instructions: *InstrList, ast: *const Ast, expr: usize) void {
+fn genInstructionsFromExpression(
+    reg: i32,
+    ast: *const Ast,
+    gpa: std.mem.Allocator,
+    expr: usize,
+    instructions: *InstrList,
+) !Operand {
     switch (ast.nodes.items(.tag)[expr]) {
         .unary_expression => {
-            std.debug.print("unary expr\n", .{});
+            const data = ast.nodes.items(.data)[expr];
+            const main = ast.nodes.items(.main)[expr];
+
+            const tag = ast.tokens.items(.tag)[main];
+            const operands: Instr.Data = .{
+                .lhs = try genInstructionsFromExpression(reg, ast, gpa, data.lhs, instructions),
+                .rhs = undefined,
+            };
+
+            switch (tag) {
+                .minus => try instructions.append(gpa, .{ .tag = .neg, .data = operands }),
+                else => {
+                    std.debug.print("ast token: {any}\n", .{tag});
+                    @panic("invalid unary expression");
+                },
+            }
         },
         .binary_expression => {
-            std.debug.print("binary expr\n", .{});
+            const data = ast.nodes.items(.data)[expr];
+
+            std.debug.print("{d} - {d}\n", .{ reg, reg + 1 });
+            const tag = ast.tokens.items(.tag)[ast.nodes.items(.main)[expr]];
+            const operands: Instr.Data = .{
+                .lhs = try genInstructionsFromExpression(reg, ast, gpa, data.lhs, instructions),
+                .rhs = try genInstructionsFromExpression(reg + 1, ast, gpa, data.rhs, instructions),
+            };
+
+            switch (tag) {
+                .plus => try instructions.append(gpa, .{ .tag = .add, .data = operands }),
+                .minus => try instructions.append(gpa, .{ .tag = .sub, .data = operands }),
+                .slash => try instructions.append(gpa, .{ .tag = .div, .data = operands }),
+                .asterisk => try instructions.append(gpa, .{ .tag = .mul, .data = operands }),
+                else => {
+                    std.debug.print("ast token: {any}\n", .{tag});
+                    @panic("invalid binary expression");
+                },
+            }
         },
         .number_expression => {
-            std.debug.print("number expr\n", .{});
+            const tok_idx = ast.nodes.items(.main)[expr];
+            const tok_loc = ast.tokens.items(.loc)[tok_idx];
+
+            // TODO: some sort of type checking should have happened before this so we know the type
+            const num_lit = ast.source[tok_loc.start..tok_loc.end];
+            const integer = try std.fmt.parseInt(i64, num_lit, 10);
+
+            try instructions.append(gpa, .{
+                .tag = .mov,
+                .data = .{
+                    .lhs = .{ .kind = .{ .reg = @enumFromInt(reg) } },
+                    .rhs = .{ .kind = .{ .immediate = integer } },
+                },
+            });
         },
         .string_expression => {
             @panic("TODO: have to generate constant strings to store in the asm");
@@ -111,7 +189,7 @@ fn genInstructionsFromExpression(instructions: *InstrList, ast: *const Ast, expr
         },
     }
 
-    _ = instructions;
+    return .{ .kind = .{ .reg = @enumFromInt(reg) } };
 }
 
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {

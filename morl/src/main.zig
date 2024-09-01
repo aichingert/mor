@@ -21,11 +21,24 @@ pub fn main() !void {
         var ast = try Ast.init(allocator, source);
         defer ast.deinit(allocator);
 
-        var mir = Mir.init(allocator, ast);
+        var mir = try Mir.init(allocator, ast);
         defer mir.deinit(allocator);
 
-        for (mir.instructions.items(.tag)) |tag| {
-            std.debug.print("{any}\n", .{tag});
+        for (mir.instructions.items(.tag), 0..) |tag, i| {
+            const data = mir.instructions.items(.data)[i];
+
+            switch (tag) {
+                .mov, .add, .sub, .div, .mul => {
+                    std.debug.print("{s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    data.lhs.print(false);
+                    std.debug.print(", ", .{});
+                    data.rhs.print(true);
+                },
+                else => {
+                    std.debug.print("{s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    data.lhs.print(true);
+                },
+            }
         }
     }
 }
