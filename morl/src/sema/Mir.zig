@@ -96,19 +96,30 @@ fn genInstructionsFromStatement(
 ) !void {
     const data = ast.nodes.items(.data)[stmt];
 
+    std.debug.print("{any}\n", .{ast.nodes.items(.tag)[stmt]});
     switch (ast.nodes.items(.tag)[stmt]) {
         .mutable_declare, .constant_declare => {
-            const result = try genInstructionsFromExpression(0, ast, gpa, data.rhs, instructions);
-            std.debug.print("result: {any}\n", .{result});
+            _ = try genInstructionsFromExpression(0, ast, gpa, data.rhs, instructions);
         },
         .function_declare => {
+            try instructions.append(gpa, .{ .tag = .lbl, .data = undefined });
             // TODO: function specific stuff
 
-            for (ast.funcs.items(.body)[data.lhs].items) |fstmt| {
+            for (ast.funcs.items(.body)[data.rhs].items) |fstmt| {
                 try genInstructionsFromStatement(ast, gpa, fstmt, instructions);
             }
 
             std.debug.print("Function declare\n", .{});
+        },
+        .return_expression => {
+            _ = try genInstructionsFromExpression(
+                0,
+                ast,
+                gpa,
+                ast.nodes.items(.data)[stmt].lhs,
+                instructions,
+            );
+            try instructions.append(gpa, .{ .tag = .ret, .data = undefined });
         },
         else => {
             std.debug.print("found tag {any}\n", .{ast.nodes.items(.tag)[stmt]});
@@ -137,16 +148,12 @@ fn genInstructionsFromExpression(
 
             switch (tag) {
                 .minus => try instructions.append(gpa, .{ .tag = .neg, .data = operands }),
-                else => {
-                    std.debug.print("ast token: {any}\n", .{tag});
-                    @panic("invalid unary expression");
-                },
+                else => unreachable,
             }
         },
         .binary_expression => {
             const data = ast.nodes.items(.data)[expr];
 
-            std.debug.print("{d} - {d}\n", .{ reg, reg + 1 });
             const tag = ast.tokens.items(.tag)[ast.nodes.items(.main)[expr]];
             const operands: Instr.Data = .{
                 .lhs = try genInstructionsFromExpression(reg, ast, gpa, data.lhs, instructions),
@@ -158,10 +165,7 @@ fn genInstructionsFromExpression(
                 .minus => try instructions.append(gpa, .{ .tag = .sub, .data = operands }),
                 .slash => try instructions.append(gpa, .{ .tag = .div, .data = operands }),
                 .asterisk => try instructions.append(gpa, .{ .tag = .mul, .data = operands }),
-                else => {
-                    std.debug.print("ast token: {any}\n", .{tag});
-                    @panic("invalid binary expression");
-                },
+                else => unreachable,
             }
         },
         .number_expression => {
@@ -179,6 +183,9 @@ fn genInstructionsFromExpression(
                     .rhs = .{ .kind = .{ .immediate = integer } },
                 },
             });
+        },
+        .identifier => {
+            // TODO: implement variables
         },
         .string_expression => {
             @panic("TODO: have to generate constant strings to store in the asm");

@@ -35,6 +35,7 @@ pub const Node = struct {
 
         unary_expression,
         binary_expression,
+        return_expression,
 
         type_declare,
         mutable_declare,
@@ -88,17 +89,34 @@ pub fn print(idx: usize, indent: u8, source: []const u8, funcs: FuncList, nodes:
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-            std.debug.print("{any}\n", .{tokens.items(.tag)[nodes.items(.main)[idx]]});
-            print(nodes.items(.data)[idx].lhs, indent, source, funcs, nodes, tokens);
+            std.debug.print("({s} ", .{std.enums.tagName(
+                Token.Tag,
+                tokens.items(.tag)[nodes.items(.main)[idx]],
+            ).?});
+
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens);
+            std.debug.print(")", .{});
         },
         .binary_expression => {
-            print(nodes.items(.data)[idx].lhs, indent + 2, source, funcs, nodes, tokens);
+            std.debug.print("(", .{});
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens);
+
+            std.debug.print(" {s} ", .{std.enums.tagName(
+                Token.Tag,
+                tokens.items(.tag)[nodes.items(.main)[idx]],
+            ).?});
+
+            print(nodes.items(.data)[idx].rhs, 0, source, funcs, nodes, tokens);
+            std.debug.print(")", .{});
+        },
+        .return_expression => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-            std.debug.print("{any}\n", .{tokens.items(.tag)[nodes.items(.main)[idx]]});
-            print(nodes.items(.data)[idx].rhs, indent + 2, source, funcs, nodes, tokens);
+            std.debug.print("return ", .{});
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens);
+            std.debug.print("\n", .{});
         },
         .number_expression => {
             var i: u8 = 0;
@@ -107,7 +125,7 @@ pub fn print(idx: usize, indent: u8, source: []const u8, funcs: FuncList, nodes:
             }
 
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
-            std.debug.print("{s} [{}-{}]\n", .{ source[loc.start..loc.end], loc.start, loc.end });
+            std.debug.print("{s}", .{source[loc.start..loc.end]});
         },
         .identifier => {
             var i: u8 = 0;
@@ -116,7 +134,7 @@ pub fn print(idx: usize, indent: u8, source: []const u8, funcs: FuncList, nodes:
             }
 
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
-            std.debug.print("{s}\n", .{source[loc.start..loc.end]});
+            std.debug.print("{s}", .{source[loc.start..loc.end]});
         },
         .string_expression => {
             var i: u8 = 0;
@@ -125,7 +143,7 @@ pub fn print(idx: usize, indent: u8, source: []const u8, funcs: FuncList, nodes:
             }
 
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
-            std.debug.print("{s}\n", .{source[loc.start..loc.end]});
+            std.debug.print("{s}", .{source[loc.start..loc.end]});
         },
         .type_declare => {
             var i: u8 = 0;
@@ -137,43 +155,49 @@ pub fn print(idx: usize, indent: u8, source: []const u8, funcs: FuncList, nodes:
             const lhs = tokens.items(.loc)[data.lhs];
             const rhs = tokens.items(.loc)[data.rhs];
 
-            std.debug.print("{s}: {s}\n", .{
+            std.debug.print("{s}: {s},", .{
                 source[lhs.start..lhs.end],
                 source[rhs.start..rhs.end],
             });
         },
         .function_declare => {
-            print(nodes.items(.data)[idx].rhs, 0, source, funcs, nodes, tokens);
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens);
 
-            for (funcs.items(.args)[nodes.items(.data)[idx].lhs].items) |arg| {
+            std.debug.print("\n", .{});
+            for (funcs.items(.args)[nodes.items(.data)[idx].rhs].items) |arg| {
                 print(arg, 2, source, funcs, nodes, tokens);
             }
 
-            for (funcs.items(.body)[nodes.items(.data)[idx].lhs].items) |stmt| {
-                print(stmt, 4, source, funcs, nodes, tokens);
-            }
+            std.debug.print("\n", .{});
+            std.debug.print("\n", .{});
 
-            print(nodes.items(.data)[idx].rhs, 0, source, funcs, nodes, tokens);
+            for (funcs.items(.body)[nodes.items(.data)[idx].rhs].items) |stmt| {
+                print(stmt, 2, source, funcs, nodes, tokens);
+            }
         },
         .constant_declare => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-            std.debug.print("const \n", .{});
+            std.debug.print("const ", .{});
 
-            print(nodes.items(.data)[idx].lhs, indent + 2, source, funcs, nodes, tokens);
-            print(nodes.items(.data)[idx].rhs, indent + 4, source, funcs, nodes, tokens);
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens);
+            std.debug.print(" :: ", .{});
+            print(nodes.items(.data)[idx].rhs, 0, source, funcs, nodes, tokens);
+            std.debug.print("\n", .{});
         },
         .mutable_declare => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
             }
-            std.debug.print("mut  \n", .{});
+            std.debug.print("mut ", .{});
 
-            print(nodes.items(.data)[idx].lhs, indent + 2, source, funcs, nodes, tokens);
-            print(nodes.items(.data)[idx].rhs, indent + 4, source, funcs, nodes, tokens);
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens);
+            std.debug.print(" := ", .{});
+            print(nodes.items(.data)[idx].rhs, 0, source, funcs, nodes, tokens);
+            std.debug.print("\n", .{});
         },
     }
 }

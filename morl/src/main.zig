@@ -28,14 +28,17 @@ pub fn main() !void {
             const data = mir.instructions.items(.data)[i];
 
             switch (tag) {
+                .lbl => {
+                    std.debug.print("{s}:\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                },
                 .mov, .add, .sub, .div, .mul => {
-                    std.debug.print("{s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
                     data.lhs.print(false);
                     std.debug.print(", ", .{});
                     data.rhs.print(true);
                 },
                 else => {
-                    std.debug.print("{s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
                     data.lhs.print(true);
                 },
             }

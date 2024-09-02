@@ -198,11 +198,11 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
 
     while (self.peekTag() != .rbrace) {
         switch (self.peekTag()) {
-            .kw_return => {
-                // TODO: add return expr
-                self.expectNext(.kw_return);
-                try body.append(try self.parseExpr(0));
-            },
+            .kw_return => try body.append(try self.addNode(.{
+                .tag = .return_expression,
+                .main = self.nextToken(),
+                .data = .{ .lhs = try self.parseExpr(0), .rhs = undefined },
+            })),
             .identifier => try body.append(try self.parseDeclare()),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
