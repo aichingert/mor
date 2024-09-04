@@ -102,7 +102,13 @@ fn genInstructionsFromStatement(
             _ = try genInstructionsFromExpression(0, ast, gpa, data.rhs, instructions);
         },
         .function_declare => {
-            try instructions.append(gpa, .{ .tag = .lbl, .data = undefined });
+            try instructions.append(gpa, .{
+                .tag = .lbl,
+                .data = .{
+                    .lhs = .{ .kind = .{ .immediate = @intCast(data.lhs) } },
+                    .rhs = undefined,
+                },
+            });
             // TODO: function specific stuff
 
             for (ast.funcs.items(.body)[data.rhs].items) |fstmt| {

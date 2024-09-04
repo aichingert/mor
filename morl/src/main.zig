@@ -1,6 +1,8 @@
 const std = @import("std");
+
 const Ast = @import("sema/Ast.zig");
 const Mir = @import("sema/Mir.zig");
+const Elf = @import("Elf.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -24,12 +26,17 @@ pub fn main() !void {
         var mir = try Mir.init(allocator, ast);
         defer mir.deinit(allocator);
 
+        var elf = Elf.init(mir);
+        defer elf.deinit();
+
         for (mir.instructions.items(.tag), 0..) |tag, i| {
             const data = mir.instructions.items(.data)[i];
 
             switch (tag) {
                 .lbl => {
-                    std.debug.print("{s}:\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    const tok = ast.tokens.items(.loc)[@intCast(data.lhs.kind.immediate)];
+
+                    std.debug.print("{d}-{d} / {s}:\n", .{ tok.start, tok.end, ast.source[tok.start..tok.end] });
                 },
                 .mov, .add, .sub, .div, .mul => {
                     std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
