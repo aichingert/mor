@@ -3,12 +3,12 @@
 const std = @import("std");
 const Mir = @import("sema/Mir.zig");
 
-const EI_NIDENT: usize = 16;
+const base_point: u64 = 0x400000;
 
 mir: Mir,
 e_header: ElfHeader,
-p_header: ProgramHeader, // TODO: probably more in the future
-machine_code: []const u8,
+p_header: ProgHeader, // TODO: probably more in the future
+machine_code: [16]u8,
 
 const Self = @This();
 
@@ -24,7 +24,14 @@ const Self = @This();
 // Elf64_Section    2       2           Section index (unsigned)
 
 const ElfHeader = struct {
-    e_ident: [EI_NIDENT]u8,
+    magic: [4]u8 = "\x7fELF".*,
+    class: u8 = 2,
+    endianness: u8 = 1,
+    version: u8 = 1,
+    abi: u8 = 0,
+    abi_version: u8 = 0,
+    padding: [7]u8 = [_]u8{0} ** 7,
+
     e_type: u16,
     e_machine: u16,
     e_version: u32,
@@ -39,37 +46,18 @@ const ElfHeader = struct {
     e_shnum: u16,
     e_shstrndx: u16,
 
-    fn init() ElfHeader {
+    fn init(entry: u64) ElfHeader {
         return .{
-            .e_ident = [EI_NIDENT]u8{
-                // EI_MAG0-3    => magic number
-                0x7f, 0x45, 0x4C, 0x46, // 0x7f, 'E', 'L', 'F',
-                // EI_CLASS     => 64-bit format
-                0x02,
-                // EI_DATA      => little endian
-                0x01,
-                // EI_VERSION   => 1
-                0x01,
-                // EI_OSABI
-                0x00,
-                // EI_ABIVERSION
-                0x00,
-                // EI_PAD
-                0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00,
-            },
-            // ET_EXEC
-            .e_type = 0x02,
-            // x86
-            .e_machine = 0x03,
-            .e_version = 0x01,
-            .e_entry = 0x780040,
+            .e_type = 0x2,
+            .e_machine = 0x3e,
+            .e_version = 0x1,
+            .e_entry = entry,
             .e_phoff = 0x40,
             .e_shoff = 0x00,
             .e_flags = 0x00,
             .e_ehsize = 0x40,
             .e_phentsize = 0x38,
-            .e_phnum = 0x01,
+            .e_phnum = 0x1,
             .e_shentsize = 0x40,
             .e_shnum = 0x00,
             .e_shstrndx = 0x00,
@@ -80,7 +68,14 @@ const ElfHeader = struct {
         self: ElfHeader,
         writer: anytype, // TODO: get better at zig...
     ) !void {
-        _ = try writer.write(&self.e_ident);
+        _ = try writer.write(&self.magic);
+        try writer.writeBits(self.class, 8);
+        try writer.writeBits(self.endianness, 8);
+        try writer.writeBits(self.version, 8);
+        try writer.writeBits(self.abi, 8);
+        try writer.writeBits(self.abi_version, 8);
+        _ = try writer.write(&self.padding);
+
         try writer.writeBits(self.e_type, 16);
         try writer.writeBits(self.e_machine, 16);
         try writer.writeBits(self.e_version, 32);
@@ -97,8 +92,8 @@ const ElfHeader = struct {
     }
 };
 
-const ProgramHeader = struct {
-    p_type: u32,
+const ProgHeader = struct {
+    p_type: ProgType,
     p_flags: u32,
     p_offset: u64,
     p_vaddr: u64,
@@ -107,21 +102,26 @@ const ProgramHeader = struct {
     p_memsz: u64,
     p_align: u64,
 
-    fn init() ProgramHeader {
+    const ProgType = enum(u32) {
+        load = 0x1,
+        dynamic = 0x2,
+    };
+
+    fn init(prog_type: ProgType, file_size: u64, mem_size: u64) ProgHeader {
         return .{
-            .p_type = 0x01,
-            .p_flags = 0x05,
-            .p_offset = 0x78,
-            .p_vaddr = 0x780040,
-            .p_paddr = 0x00,
-            .p_filesz = 0x10,
-            .p_memsz = 0x10,
-            .p_align = 0x0010,
+            .p_type = prog_type,
+            .p_flags = 0x7,
+            .p_offset = 0x00,
+            .p_vaddr = base_point,
+            .p_paddr = base_point,
+            .p_filesz = file_size,
+            .p_memsz = mem_size,
+            .p_align = 0x100,
         };
     }
 
-    fn writeToBin(self: *ProgramHeader, writer: anytype) !void {
-        try writer.writeBits(self.p_type, 32);
+    fn writeToBin(self: *ProgHeader, writer: anytype) !void {
+        try writer.writeBits(@intFromEnum(self.p_type), 32);
         try writer.writeBits(self.p_flags, 32);
         try writer.writeBits(self.p_offset, 64);
         try writer.writeBits(self.p_vaddr, 64);
@@ -135,11 +135,18 @@ const ProgramHeader = struct {
 pub fn init(
     mir: Mir,
 ) Self {
+    // TODO: generate from mir
+    const code = [16]u8{ 0x48, 0xC7, 0xC0, 0x3C, 0x00, 0x00, 0x00, 0x48, 0xC7, 0xC7, 0x14, 0x00, 0x00, 0x00, 0x0F, 0x05 };
+
+    const header_off = 64 + 56;
+    const entry_off = base_point + header_off;
+    const file_size = header_off + code.len;
+
     return .{
         .mir = mir,
-        .machine_code = "",
-        .e_header = ElfHeader.init(),
-        .p_header = ProgramHeader.init(),
+        .machine_code = code,
+        .e_header = ElfHeader.init(entry_off),
+        .p_header = ProgHeader.init(.load, file_size, file_size),
     };
 }
 
@@ -152,13 +159,8 @@ pub fn genExecutable(self: *Self) !void {
 
     try self.e_header.writeToBin(&bit_stream);
     try self.p_header.writeToBin(&bit_stream);
-
-    _ = try bit_stream.write(&[_]u8{
-        0x48, 0xC7, 0xC0, 0x3C,
-        0x00, 0x00, 0x00, 0x48,
-        0xC7, 0xC7, 0x2A, 0x00,
-        0x00, 0x00, 0x0F, 0x05,
-    });
+    _ = try bit_stream.write(&self.machine_code);
+    try bit_stream.flushBits();
 }
 
 pub fn deinit(self: *Self) void {
