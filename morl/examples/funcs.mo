@@ -5,7 +5,7 @@ fib :: fn(n: u32) u32 {
 }
 
 main :: fn() void {
-    hello :: -20 * 15
+    hello :: fib(fib(10 + 20 * 10))
 
     return hello
 }

@@ -8,7 +8,6 @@ const InstrList = std.MultiArrayList(Instr);
 
 const Self = @This();
 
-gpa: std.mem.Allocator,
 instructions: InstrList.Slice,
 
 pub const Operand = struct {
@@ -82,10 +81,7 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
         try genInstructionsFromStatement(&ast, gpa, item, &instructions);
     }
 
-    return .{
-        .gpa = gpa,
-        .instructions = instructions.toOwnedSlice(),
-    };
+    return .{ .instructions = instructions.toOwnedSlice() };
 }
 
 fn genInstructionsFromStatement(
@@ -96,7 +92,6 @@ fn genInstructionsFromStatement(
 ) !void {
     const data = ast.nodes.items(.data)[stmt];
 
-    std.debug.print("{any}\n", .{ast.nodes.items(.tag)[stmt]});
     switch (ast.nodes.items(.tag)[stmt]) {
         .mutable_declare, .constant_declare => {
             _ = try genInstructionsFromExpression(0, ast, gpa, data.rhs, instructions);
@@ -190,9 +185,34 @@ fn genInstructionsFromExpression(
                 },
             });
         },
+        .call_expression => {
+            const data = ast.nodes.items(.data)[expr];
+            const call = ast.calls.items[data.rhs];
+
+            for (call.args.items, @intCast(reg)..) |arg, register| {
+                std.debug.print("{d}\n", .{arg});
+                _ = try genInstructionsFromExpression(
+                    @intCast(register),
+                    ast,
+                    gpa,
+                    arg,
+                    instructions,
+                );
+            }
+
+            // TODO: argument passing
+            try instructions.append(gpa, .{
+                .tag = .call,
+                .data = .{
+                    .lhs = .{ .kind = .{ .immediate = @intCast(ast.nodes.items(.data)[expr].lhs) } },
+                    .rhs = undefined,
+                },
+            });
+        },
         .identifier => {
             // TODO: implement variables
         },
+
         .string_expression => {
             @panic("TODO: have to generate constant strings to store in the asm");
         },

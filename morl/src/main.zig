@@ -34,9 +34,16 @@ pub fn main() !void {
 
             switch (tag) {
                 .lbl => {
-                    const tok = ast.tokens.items(.loc)[@intCast(data.lhs.kind.immediate)];
+                    const node = ast.nodes.items(.main)[@intCast(data.lhs.kind.immediate)];
+                    const tok = ast.tokens.items(.loc)[node];
 
-                    std.debug.print("{d}-{d} / {s}:\n", .{ tok.start, tok.end, ast.source[tok.start..tok.end] });
+                    std.debug.print("{s}:\n", .{ast.source[tok.start..tok.end]});
+                },
+                .call => {
+                    const node = ast.nodes.items(.main)[@intCast(data.lhs.kind.immediate)];
+                    const tok = ast.tokens.items(.loc)[node];
+
+                    std.debug.print("    call {s}\n", .{ast.source[tok.start..tok.end]});
                 },
                 .mov, .add, .sub, .div, .mul => {
                     std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});

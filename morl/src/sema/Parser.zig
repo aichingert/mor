@@ -13,6 +13,7 @@ tok_locs: []const Token.Loc,
 source: []const u8,
 nodes: Ast.NodeList,
 funcs: Ast.FuncList,
+calls: std.ArrayList(Ast.Call),
 stmts: std.ArrayList(usize),
 
 pub fn init(
@@ -26,9 +27,10 @@ pub fn init(
         .tok_i = 0,
         .tok_tags = tok_tags,
         .tok_locs = tok_locs,
-        .nodes = Ast.NodeList{},
-        .funcs = Ast.FuncList{},
         .stmts = std.ArrayList(usize).init(gpa),
+        .calls = std.ArrayList(Ast.Call).init(gpa),
+        .funcs = Ast.FuncList{},
+        .nodes = Ast.NodeList{},
         .source = source,
     };
 }
@@ -69,6 +71,11 @@ fn addNode(self: *Self, node: Ast.Node) std.mem.Allocator.Error!usize {
 fn addFunc(self: *Self, func: Ast.Func) std.mem.Allocator.Error!usize {
     try self.funcs.append(self.gpa, func);
     return self.funcs.len - 1;
+}
+
+fn addCall(self: *Self, call: Ast.Call) std.mem.Allocator.Error!usize {
+    try self.calls.append(call);
+    return self.calls.items.len - 1;
 }
 
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
@@ -135,7 +142,6 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
 fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
     switch (self.peekTag()) {
         .kw_fn => return self.parseFunc(),
-        .string_lit => return self.parsePrefix(),
         else => return self.parseExpr(0),
     }
 }
@@ -235,6 +241,27 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
             });
 
             continue;
+        }
+
+        if (self.nodes.items(.tag)[node] == .identifier and tag == .lparen) {
+            const call = try self.addNode(.{
+                .tag = .call_expression,
+                .main = self.nextToken(),
+                .data = .{ .lhs = node, .rhs = undefined },
+            });
+            var args = std.ArrayList(usize).init(self.gpa);
+            node = call;
+
+            while (self.peekTag() != .rparen) {
+                try args.append(try self.parseExpr(0));
+
+                if (self.peekTag() != .rparen) {
+                    self.expectNext(.comma);
+                }
+            }
+
+            self.expectNext(.rparen);
+            self.nodes.items(.data)[call].rhs = try self.addCall(.{ .args = args });
         }
 
         break;
