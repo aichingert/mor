@@ -27,6 +27,9 @@ pub fn main() !void {
         defer mir.deinit(allocator);
 
         var elf = Elf.init(mir);
+
+        try elf.genExecutable();
+
         defer elf.deinit();
 
         for (mir.instructions.items(.tag), 0..) |tag, i| {

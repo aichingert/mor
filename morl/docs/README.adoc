@@ -26,6 +26,8 @@ hello : fn(void) void : fn() {
 
 == resources
 
+https://refspecs.linuxfoundation.org/elf/elf.pdf[elf spec^]
 https://build-your-own.org/blog/20230219_elf_craft/[elf^]
-file:///home/pha/Downloads/325462-sdm-vol-1-2abcd-3abcd-4.pdf[intel instr^]
+https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html[intel_instr^]
 
+https://defuse.ca/online-x86-assembler.htm#disassembly2[helpfull^]
