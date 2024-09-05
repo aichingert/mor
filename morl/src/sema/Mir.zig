@@ -4,11 +4,7 @@ const std = @import("std");
 
 const Ast = @import("Ast.zig");
 
-const InstrList = std.MultiArrayList(Instr);
-
-const Self = @This();
-
-instructions: InstrList.Slice,
+pub const InstrList = std.MultiArrayList(Instr);
 
 pub const Operand = struct {
     kind: Kind,
@@ -74,14 +70,14 @@ pub const Instr = struct {
     };
 };
 
-pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
+pub fn genInstructionsFromAst(gpa: std.mem.Allocator, ast: Ast) !InstrList.Slice {
     var instructions = InstrList{};
 
     for (ast.stmts.items) |item| {
         try genInstructionsFromStatement(&ast, gpa, item, &instructions);
     }
 
-    return .{ .instructions = instructions.toOwnedSlice() };
+    return instructions.toOwnedSlice();
 }
 
 fn genInstructionsFromStatement(
@@ -223,8 +219,4 @@ fn genInstructionsFromExpression(
     }
 
     return .{ .kind = .{ .reg = @enumFromInt(reg) } };
-}
-
-pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-    self.instructions.deinit(gpa);
 }

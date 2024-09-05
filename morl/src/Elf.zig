@@ -1,16 +1,11 @@
 // following this elf spec : https://www.infania.net/misc1/sgi_techpubs/techpubs/007-4658-001.pdf
+// and a lot of other sources at the bottom of this one are some v
+// https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 
 const std = @import("std");
 const Mir = @import("sema/Mir.zig");
 
 const base_point: u64 = 0x400000;
-
-mir: Mir,
-e_header: ElfHeader,
-p_header: ProgHeader, // TODO: probably more in the future
-machine_code: [16]u8,
-
-const Self = @This();
 
 // Name             Size    Alignment   Purpose
 // Elf64_Addr       8       8           Unsigned program address
@@ -132,37 +127,32 @@ const ProgHeader = struct {
     }
 };
 
-pub fn init(
-    mir: Mir,
-) Self {
+pub fn genExecutable(mir: Mir.InstrList.Slice) !void {
+    _ = mir;
+
     // TODO: generate from mir
-    const code = [16]u8{ 0x48, 0xC7, 0xC0, 0x3C, 0x00, 0x00, 0x00, 0x48, 0xC7, 0xC7, 0x14, 0x00, 0x00, 0x00, 0x0F, 0x05 };
+    const machine_code = [16]u8{
+        0x48, 0xC7, 0xC0, 0x3C,
+        0x00, 0x00, 0x00, 0x48,
+        0xC7, 0xC7, 0x14, 0x00,
+        0x00, 0x00, 0x0F, 0x05,
+    };
 
     const header_off = 64 + 56;
     const entry_off = base_point + header_off;
-    const file_size = header_off + code.len;
+    const file_size = header_off + machine_code.len;
 
-    return .{
-        .mir = mir,
-        .machine_code = code,
-        .e_header = ElfHeader.init(entry_off),
-        .p_header = ProgHeader.init(.load, file_size, file_size),
-    };
-}
+    var e_header = ElfHeader.init(entry_off);
+    var p_header = ProgHeader.init(.load, file_size, file_size);
 
-pub fn genExecutable(self: *Self) !void {
     const cwd = std.fs.cwd();
     const file = try cwd.createFile("bin", .{ .read = true });
     defer file.close();
 
     var bit_stream = std.io.bitWriter(.little, file.writer());
 
-    try self.e_header.writeToBin(&bit_stream);
-    try self.p_header.writeToBin(&bit_stream);
-    _ = try bit_stream.write(&self.machine_code);
+    try e_header.writeToBin(&bit_stream);
+    try p_header.writeToBin(&bit_stream);
+    _ = try bit_stream.write(&machine_code);
     try bit_stream.flushBits();
-}
-
-pub fn deinit(self: *Self) void {
-    _ = self;
 }

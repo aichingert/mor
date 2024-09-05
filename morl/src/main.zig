@@ -23,12 +23,39 @@ pub fn main() !void {
         var ast = try Ast.init(allocator, source);
         defer ast.deinit(allocator);
 
-        var mir = try Mir.init(allocator, ast);
+        var mir: Mir.InstrList.Slice = try Mir.genInstructionsFromAst(allocator, ast);
         defer mir.deinit(allocator);
 
-        var elf = Elf.init(mir);
-        try elf.genExecutable();
-        defer elf.deinit();
+        for (mir.items(.tag), 0..) |tag, i| {
+            const data = mir.items(.data)[i];
+
+            switch (tag) {
+                .lbl => {
+                    const node = ast.nodes.items(.main)[@intCast(data.lhs.kind.immediate)];
+                    const tok = ast.tokens.items(.loc)[node];
+
+                    std.debug.print("{s}:\n", .{ast.source[tok.start..tok.end]});
+                },
+                .call => {
+                    const node = ast.nodes.items(.main)[@intCast(data.lhs.kind.immediate)];
+                    const tok = ast.tokens.items(.loc)[node];
+
+                    std.debug.print("    call {s}\n", .{ast.source[tok.start..tok.end]});
+                },
+                .mov, .add, .sub, .div, .mul => {
+                    std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    data.lhs.print(false);
+                    std.debug.print(", ", .{});
+                    data.rhs.print(true);
+                },
+                else => {
+                    std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    data.lhs.print(true);
+                },
+            }
+        }
+
+        try Elf.genExecutable(mir);
     }
 }
 
@@ -38,32 +65,3 @@ test "simple test" {
     try list.append(42);
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
-
-//for (mir.instructions.items(.tag), 0..) |tag, i| {
-//    const data = mir.instructions.items(.data)[i];
-
-//    switch (tag) {
-//        .lbl => {
-//            const node = ast.nodes.items(.main)[@intCast(data.lhs.kind.immediate)];
-//            const tok = ast.tokens.items(.loc)[node];
-
-//            std.debug.print("{s}:\n", .{ast.source[tok.start..tok.end]});
-//        },
-//        .call => {
-//            const node = ast.nodes.items(.main)[@intCast(data.lhs.kind.immediate)];
-//            const tok = ast.tokens.items(.loc)[node];
-
-//            std.debug.print("    call {s}\n", .{ast.source[tok.start..tok.end]});
-//        },
-//        .mov, .add, .sub, .div, .mul => {
-//            std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
-//            data.lhs.print(false);
-//            std.debug.print(", ", .{});
-//            data.rhs.print(true);
-//        },
-//        else => {
-//            std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
-//            data.lhs.print(true);
-//        },
-//    }
-//}
