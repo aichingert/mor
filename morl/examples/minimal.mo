@@ -1,7 +1,10 @@
-simple :: -1 + 1*2311 - 34
+main :: fn() void {
+    simple :: -1 + 1*2311 - 34
 
-lol := 123
+    lol := 123
 
-he_he :: 31 - 22 / 10
+    he_he :: 31 - 22 / 10
+    return he_he
+}
 
-multi_mul :: 1 * 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9 * 10 * 11 * 12
+

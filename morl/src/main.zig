@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Ast = @import("sema/Ast.zig");
 const Mir = @import("sema/Mir.zig");
+
 const Elf = @import("Elf.zig");
 
 pub fn main() !void {
@@ -42,6 +43,10 @@ pub fn main() !void {
 
                     std.debug.print("    call {s}\n", .{ast.source[tok.start..tok.end]});
                 },
+                .ret => {
+                    std.debug.print("    {s}\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+                    std.debug.print(" {any}\n", .{data});
+                },
                 .mov, .add, .sub, .div, .mul => {
                     std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
                     data.lhs.print(false);
@@ -55,7 +60,7 @@ pub fn main() !void {
             }
         }
 
-        try Elf.genExecutable(mir);
+        try Elf.genExecutable(allocator, mir);
     }
 }
 
