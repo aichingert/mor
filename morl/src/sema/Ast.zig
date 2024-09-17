@@ -64,7 +64,7 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     var lexer = Lexer.init(source);
 
     while (true) {
-        const token = lexer.next();
+        const token = lexer.genNext();
         try tokens.append(gpa, token);
         if (token.tag == .eof) break;
     }

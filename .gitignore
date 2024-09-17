@@ -3,6 +3,7 @@ zig-out
 
 # Added by cargo
 
+bin
 prog.asm
 prog.o
 prog

@@ -44,8 +44,9 @@ pub fn main() !void {
                     std.debug.print("    call {s}\n", .{ast.source[tok.start..tok.end]});
                 },
                 .ret => {
+                    // TODO: eval return expr:
+                    // std.debug.print(" {any}\n", .{data});
                     std.debug.print("    {s}\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
-                    std.debug.print(" {any}\n", .{data});
                 },
                 .mov, .add, .sub, .div, .mul => {
                     std.debug.print("    {s} ", .{std.enums.tagName(Mir.Instr.Tag, tag).?});

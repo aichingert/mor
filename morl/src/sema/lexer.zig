@@ -25,12 +25,12 @@ pub const Token = struct {
         lbracket,
         rbracket,
 
+        arrow,
         equal,
         colon,
         comma,
         semicolon,
 
-        kw_fn,
         kw_return,
 
         invalid,
@@ -77,23 +77,23 @@ pub const Lexer = struct {
     }
 
     // zig fmt: off
-    fn is_number(self: *Self) bool {
+    fn isNumber(self: *Self) bool {
         return self.index + 1 < self.source.len 
             and self.source[self.index + 1] >= '0' 
             and self.source[self.index + 1] <= '9';
     }
 
-    fn is_within_string(self: *Self) bool {
+    fn isWithinString(self: *Self) bool {
         return self.index < self.source.len and self.source[self.index] != '"';
     }
 
-    fn is_identifier(self: *Self) bool {
+    fn isIdentifier(self: *Self) bool {
         return self.index + 1 < self.source.len and 
             (self.source[self.index + 1] >= 'a' and self.source[self.index + 1] <= 'z')
             or
             (self.source[self.index + 1] >= 'A' and self.source[self.index + 1] <= 'Z')
             or 
-            self.source[self.index + 1] == '_' or self.is_number();
+            self.source[self.index + 1] == '_' or self.isNumber();
     }
     // zig fmt: on
 
@@ -109,7 +109,29 @@ pub const Lexer = struct {
         };
     }
 
-    pub fn next(self: *Self) Token {
+    fn genTokenIfNextIs(
+        self: *Self,
+        next: u8,
+        then: Token.Tag,
+        otherwise: Token.Tag,
+        start: usize,
+    ) Token {
+        var default = self.genToken(otherwise, start);
+
+        if (self.index >= self.source.len) {
+            return default;
+        }
+
+        if (self.source[self.index] == next) {
+            self.index += 1;
+            default.tag = then;
+            default.loc.end = self.index;
+        }
+
+        return default;
+    }
+
+    pub fn genNext(self: *Self) Token {
         var result: Token = .{
             .tag = .eof,
             .loc = .{
@@ -121,7 +143,7 @@ pub const Lexer = struct {
         while (self.index < self.source.len) : (self.index += 1) {
             return switch (self.source[self.index]) {
                 '+' => self.genToken(.plus, result.loc.start),
-                '-' => self.genToken(.minus, result.loc.start),
+                '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
                 '/' => self.genToken(.slash, result.loc.start),
                 '*' => self.genToken(.asterisk, result.loc.start),
                 ':' => self.genToken(.colon, result.loc.start),
@@ -133,23 +155,21 @@ pub const Lexer = struct {
                 '{' => self.genToken(.lbrace, result.loc.start),
                 '}' => self.genToken(.rbrace, result.loc.start),
                 '0'...'9' => {
-                    while (self.is_number()) : (self.index += 1) {}
+                    while (self.isNumber()) : (self.index += 1) {}
                     return self.genToken(.number_lit, result.loc.start);
                 },
                 '"' => {
                     self.index += 1;
 
-                    while (self.is_within_string()) : (self.index += 1) {}
+                    while (self.isWithinString()) : (self.index += 1) {}
                     return self.genToken(.string_lit, result.loc.start);
                 },
                 'a'...'z', 'A'...'Z' => {
-                    while (self.is_identifier()) : (self.index += 1) {}
+                    while (self.isIdentifier()) : (self.index += 1) {}
                     var token = self.genToken(.identifier, result.loc.start);
                     const eql = std.mem.eql;
 
-                    if (eql(u8, self.source[token.loc.start..token.loc.end], "fn")) {
-                        token.tag = .kw_fn;
-                    } else if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
+                    if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
                         token.tag = .kw_return;
                     }
 

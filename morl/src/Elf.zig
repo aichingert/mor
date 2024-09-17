@@ -156,7 +156,7 @@ pub fn genExecutable(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
             else => {},
         }
 
-        std.debug.print("{s}\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
+        //std.debug.print("{s}\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
     }
 
     const sys_exit = [_]u8{

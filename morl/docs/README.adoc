@@ -12,13 +12,12 @@ the mor programming language
 [source, mor]
 ----
 
-hello :: fn() {
-    // println("hello")
-}
+hello :: () {
+    var := 10
+    add := var * 2 - 10
 
-// or
-
-hello : fn(void) void : fn() {
+    // TODO: I have to think about the 
+    // standard library a bit more 
     // println("hello")
 }
 

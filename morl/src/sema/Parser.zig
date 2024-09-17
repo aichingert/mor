@@ -93,8 +93,8 @@ pub fn parse(self: *Self) std.mem.Allocator.Error!void {
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const ident = try self.parsePrefix();
     self.expectNext(.colon);
-    var type_ident: i32 = -1;
 
+    var type_ident: i32 = -1;
     if (self.peekTag() == .identifier) {
         type_ident = @as(i32, @intCast(self.nextToken()));
     }
@@ -141,17 +141,16 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
 
 fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
     switch (self.peekTag()) {
-        .kw_fn => return self.parseFunc(),
+        .lparen => return self.parseFunc(),
         else => return self.parseExpr(0),
     }
 }
 
 // TODO: use actual types instead of identifiers
 fn parseFunc(self: *Self) !usize {
-    var args = std.ArrayList(usize).init(self.gpa);
-
-    self.expectNext(.kw_fn);
     self.expectNext(.lparen);
+
+    var args = std.ArrayList(usize).init(self.gpa);
 
     while (self.peekTag() == .identifier) {
         const param = self.nextToken();
@@ -176,11 +175,13 @@ fn parseFunc(self: *Self) !usize {
 
     self.expectNext(.rparen);
 
-    const return_type = if (self.peekTag() == .identifier)
-        self.tok_tags[self.nextToken()]
-    else
-        // TODO: replace with void type
-        .identifier;
+    // TODO: implement actual types
+    var default_ret_typ: Token.Tag = .identifier;
+
+    if (self.tok_tags[self.nextToken()] == .arrow) {
+        default_ret_typ = self.tok_tags[self.nextToken()];
+        self.expectNext(.lbrace);
+    }
 
     const body = try self.parseFuncBody();
 
@@ -192,7 +193,7 @@ fn parseFunc(self: *Self) !usize {
             .rhs = try self.addFunc(.{
                 .args = args,
                 .body = body,
-                .return_type = return_type,
+                .return_type = default_ret_typ,
             }),
         },
     });
@@ -200,7 +201,6 @@ fn parseFunc(self: *Self) !usize {
 
 fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
     var body = std.ArrayList(usize).init(self.gpa);
-    self.expectNext(.lbrace);
 
     while (self.peekTag() != .rbrace) {
         switch (self.peekTag()) {
@@ -211,6 +211,7 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
             })),
             .identifier => try body.append(try self.parseDeclare()),
             else => {
+                std.debug.print("{d}\n", .{self.tok_i});
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
             },
