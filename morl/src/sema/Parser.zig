@@ -205,7 +205,7 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
     while (self.peekTag() != .rbrace) {
         switch (self.peekTag()) {
             .kw_return => try body.append(try self.addNode(.{
-                .tag = .return_expression,
+                .tag = .return_stmt,
                 .main = self.nextToken(),
                 .data = .{ .lhs = try self.parseExpr(0), .rhs = undefined },
             })),
@@ -308,5 +308,7 @@ fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
     }
 
     std.debug.print("{any}\n", .{self.peekTag()});
-    @panic("should not get here");
+    // TODO: replace with unit type or void
+    _ = self.nextToken();
+    return 0;
 }

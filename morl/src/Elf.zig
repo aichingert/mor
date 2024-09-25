@@ -127,36 +127,18 @@ const ProgHeader = struct {
     }
 };
 
-pub fn genExecutable(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
+pub fn genExe(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
     var machine_code = std.ArrayList(u8).init(gpa);
     defer machine_code.deinit();
 
     for (mir.items(.tag), 0..) |tag, i| {
+        _ = i;
+
         switch (tag) {
-            .lbl, .push, .pop, .call, .ret, .jmp => {}, // TODO:
-            .mov => {
-                // it is not feasable to look up every option, I will have to understand
-                // the intel manual first before I can generate the machine code for intel
-
-                // 48 c7 c0 3c 00 00 00    mov    rax,0x3c
-                // 48 c7 c1 3c 00 00 00    mov    rcx,0x3c
-                // 48 c7 c2 3c 00 00 00    mov    rdx,0x3c
-                // 48 c7 c3 3c 00 00 00    mov    rbx,0x3c
-                // 48 c7 c6 3c 00 00 00    mov    rbp,0x3c
-                // 48 c7 c6 3c 00 00 00    mov    rsi,0x3c
-                // 48 c7 c7 3c 00 00 00    mov    rdi,0x3c
-                const data = mir.items(.data)[i];
-                _ = data;
-
-                //machine_code.append(0x48);
-                //machine_code.append(0xc7);
-                //machine_code.append(@intFromEnum(data.lhs.kind.reg));
-                //machine_code.append();
-            },
+            .lbl, .call, .ret, .jmp => {}, // TODO:
+            .mov => {},
             else => {},
         }
-
-        //std.debug.print("{s}\n", .{std.enums.tagName(Mir.Instr.Tag, tag).?});
     }
 
     const sys_exit = [_]u8{
@@ -165,7 +147,7 @@ pub fn genExecutable(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
         0x0f, 0x05,
     };
 
-    const header_off = 64 + 56;
+    const header_off = @sizeOf(ElfHeader) + @sizeOf(ProgHeader);
     const entry_off = base_point + header_off;
     const file_size = header_off + machine_code.items.len;
 
@@ -180,9 +162,11 @@ pub fn genExecutable(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
 
     try e_header.writeToBin(&bit_stream);
     try p_header.writeToBin(&bit_stream);
+
     for (machine_code.items) |byte| {
         try bit_stream.writeBits(byte, 8);
     }
+
     _ = try bit_stream.write(&sys_exit);
     try bit_stream.flushBits();
 }

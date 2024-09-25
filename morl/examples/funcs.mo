@@ -1,9 +1,14 @@
 fib :: (n: u32) -> u32 {
-    lol :: 123
+    res := n - 2 + n - 1
 
-    return lol + 20
+    return res
 }
 
 main :: () {
-    hello :: fib(fib(10 + 20 * 10))
+    n :: 10
+    o := n * 5
+
+    hello :: fib(fib(o))
+
+    return;
 }

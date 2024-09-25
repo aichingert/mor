@@ -1,47 +1,31 @@
 // Mir.zig: Mor intermediate representation
 
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const Ast = @import("Ast.zig");
+const lex = @import("lexer.zig");
 
 pub const InstrList = std.MultiArrayList(Instr);
 
 pub const Operand = struct {
     kind: Kind,
 
-    const Register = enum(u8) {
-        R0 = 0,
-        R1,
-        R2,
-        R3,
-        R5,
-        R6,
-        R7,
-        R8,
-        R9,
-        R10,
-        R11,
-        R12,
-        SP,
+    const Reg = struct {
+        r_kind: RegKind,
+        r_count: u8,
+    };
+
+    const RegKind = enum(u8) {
+        sp, // stack pointer
+        gp, // general purpose
     };
 
     const Kind = union(enum) {
-        reg: Register,
-        val: Register,
+        reg: Reg,
+        token: usize,
         immediate: i64,
-        indexed: std.meta.Tuple(&[_]type{ Register, *Kind }),
     };
-
-    pub fn print(self: Operand, nl: bool) void {
-        switch (self.kind) {
-            .reg => |r| std.debug.print("{s}", .{std.enums.tagName(Register, r).?}),
-            .val => |r| std.debug.print("[{s}]", .{std.enums.tagName(Register, r).?}),
-            .indexed => @panic("TODO: printing indexed"),
-            .immediate => |v| std.debug.print("{d}", .{v}),
-        }
-
-        if (nl) std.debug.print("\n", .{});
-    }
 };
 
 pub const Instr = struct {
@@ -65,158 +49,125 @@ pub const Instr = struct {
         ret,
         call,
 
-        pop,
-        push,
+        fn unaryFrom(token: lex.Token.Tag) Tag {
+            switch (token) {
+                .minus => return .neg,
+                else => std.debug.panic("Unknown unary expr kind: {any}\n", .{token}),
+            }
+        }
+
+        fn binaryFrom(token: lex.Token.Tag) Tag {
+            switch (token) {
+                .plus => return .add,
+                .minus => return .sub,
+                .slash => return .div,
+                .asterisk => return .mul,
+                else => std.debug.panic("Unknown binary expr kind: {any}\n", .{token}),
+            }
+        }
     };
 };
 
-pub fn genInstructionsFromAst(gpa: std.mem.Allocator, ast: Ast) !InstrList.Slice {
+fn addInstr(gpa: Allocator, instrs: *InstrList, tag: Instr.Tag, data: Instr.Data) !Operand {
+    try instrs.append(gpa, .{
+        .tag = tag,
+        .data = data,
+    });
+
+    return data.lhs;
+}
+
+pub fn genFromAst(gpa: std.mem.Allocator, ast: Ast) !InstrList.Slice {
     var instructions = InstrList{};
 
     for (ast.stmts.items) |item| {
-        try genInstructionsFromStatement(&ast, gpa, item, &instructions);
+        try genFromStmt(&ast, gpa, item, &instructions);
     }
 
     return instructions.toOwnedSlice();
 }
 
-fn genInstructionsFromStatement(
-    ast: *const Ast,
-    gpa: std.mem.Allocator,
-    stmt: usize,
-    instructions: *InstrList,
-) !void {
+fn genFromStmt(ast: *const Ast, gpa: Allocator, stmt: usize, instrs: *InstrList) !void {
+    const tag = ast.nodes.items(.tag)[stmt];
     const data = ast.nodes.items(.data)[stmt];
 
-    switch (ast.nodes.items(.tag)[stmt]) {
-        .mutable_declare, .constant_declare => {
-            _ = try genInstructionsFromExpression(0, ast, gpa, data.rhs, instructions);
-        },
+    switch (tag) {
+        .mutable_declare,
+        .constant_declare,
+        => _ = try genFromExpr(ast, gpa, data.rhs, 0, instrs),
         .function_declare => {
-            try instructions.append(gpa, .{
-                .tag = .lbl,
-                .data = .{
-                    .lhs = .{ .kind = .{ .immediate = @intCast(data.lhs) } },
-                    .rhs = undefined,
-                },
+            _ = try addInstr(gpa, instrs, .lbl, .{
+                .lhs = .{ .kind = .{ .token = data.lhs } },
+                .rhs = undefined,
             });
-            // TODO: function specific stuff
 
-            for (ast.funcs.items(.body)[data.rhs].items) |fstmt| {
-                try genInstructionsFromStatement(ast, gpa, fstmt, instructions);
+            for (ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
+                try genFromStmt(ast, gpa, func_stmt, instrs);
             }
-
-            std.debug.print("Function declare\n", .{});
         },
-        .return_expression => {
-            _ = try genInstructionsFromExpression(
-                0,
-                ast,
-                gpa,
-                ast.nodes.items(.data)[stmt].lhs,
-                instructions,
-            );
-            try instructions.append(gpa, .{ .tag = .ret, .data = undefined });
-        },
-        else => {
-            std.debug.print("found tag {any}\n", .{ast.nodes.items(.tag)[stmt]});
-            @panic("Failed with incorrect tag");
-        },
+        .return_stmt => {},
+        else => std.debug.panic("Invalid statment type: {any}\n", .{tag}),
     }
 }
 
-fn genInstructionsFromExpression(
-    reg: i32,
+fn genFromExpr(
     ast: *const Ast,
-    gpa: std.mem.Allocator,
+    gpa: Allocator,
     expr: usize,
-    instructions: *InstrList,
+    r_count: u8,
+    instrs: *InstrList,
 ) !Operand {
-    switch (ast.nodes.items(.tag)[expr]) {
-        .unary_expression => {
-            const data = ast.nodes.items(.data)[expr];
-            const main = ast.nodes.items(.main)[expr];
+    const tag = ast.nodes.items(.tag)[expr];
 
-            const tag = ast.tokens.items(.tag)[main];
-            const operands: Instr.Data = .{
-                .lhs = try genInstructionsFromExpression(reg, ast, gpa, data.lhs, instructions),
-                .rhs = undefined,
-            };
+    if (tag == .number_expression) {
+        const tok_idx = ast.nodes.items(.main)[expr];
+        const tok_loc = ast.tokens.items(.loc)[tok_idx];
 
-            switch (tag) {
-                .minus => try instructions.append(gpa, .{ .tag = .neg, .data = operands }),
-                else => unreachable,
-            }
-        },
-        .binary_expression => {
-            const data = ast.nodes.items(.data)[expr];
+        const num_lit = ast.source[tok_loc.start..tok_loc.end];
+        const integer = try std.fmt.parseInt(i64, num_lit, 10);
 
-            const tag = ast.tokens.items(.tag)[ast.nodes.items(.main)[expr]];
-            const operands: Instr.Data = .{
-                .lhs = try genInstructionsFromExpression(reg, ast, gpa, data.lhs, instructions),
-                .rhs = try genInstructionsFromExpression(reg + 1, ast, gpa, data.rhs, instructions),
-            };
+        const data = .{
+            .lhs = .{ .kind = .{ .reg = .{ .r_kind = .gp, .r_count = r_count } } },
+            .rhs = .{ .kind = .{ .immediate = integer } },
+        };
 
-            switch (tag) {
-                .plus => try instructions.append(gpa, .{ .tag = .add, .data = operands }),
-                .minus => try instructions.append(gpa, .{ .tag = .sub, .data = operands }),
-                .slash => try instructions.append(gpa, .{ .tag = .div, .data = operands }),
-                .asterisk => try instructions.append(gpa, .{ .tag = .mul, .data = operands }),
-                else => unreachable,
-            }
-        },
-        .number_expression => {
-            const tok_idx = ast.nodes.items(.main)[expr];
-            const tok_loc = ast.tokens.items(.loc)[tok_idx];
-
-            // TODO: some sort of type checking should have happened before this so we know the type
-            const num_lit = ast.source[tok_loc.start..tok_loc.end];
-            const integer = try std.fmt.parseInt(i64, num_lit, 10);
-
-            try instructions.append(gpa, .{
-                .tag = .mov,
-                .data = .{
-                    .lhs = .{ .kind = .{ .reg = @enumFromInt(reg) } },
-                    .rhs = .{ .kind = .{ .immediate = integer } },
-                },
-            });
-        },
-        .call_expression => {
-            const data = ast.nodes.items(.data)[expr];
-            const call = ast.calls.items[data.rhs];
-
-            for (call.args.items, @intCast(reg)..) |arg, register| {
-                std.debug.print("{d}\n", .{arg});
-                _ = try genInstructionsFromExpression(
-                    @intCast(register),
-                    ast,
-                    gpa,
-                    arg,
-                    instructions,
-                );
-            }
-
-            // TODO: argument passing
-            try instructions.append(gpa, .{
-                .tag = .call,
-                .data = .{
-                    .lhs = .{ .kind = .{ .immediate = @intCast(ast.nodes.items(.data)[expr].lhs) } },
-                    .rhs = undefined,
-                },
-            });
-        },
-        .identifier => {
-            // TODO: implement variables
-        },
-
-        .string_expression => {
-            @panic("TODO: have to generate constant strings to store in the asm");
-        },
-        else => {
-            std.debug.print("found tag {any}\n", .{ast.nodes.items(.tag)[expr]});
-            @panic("Failed not an expression");
-        },
+        return addInstr(gpa, instrs, .mov, data);
     }
 
-    return .{ .kind = .{ .reg = @enumFromInt(reg) } };
+    const data = ast.nodes.items(.data)[expr];
+    const main = ast.nodes.items(.main)[expr];
+
+    return switch (tag) {
+        .identifier => addInstr(gpa, instrs, .mov, .{
+            .lhs = .{ .kind = .{ .reg = .{ .r_kind = .gp, .r_count = r_count } } },
+            .rhs = .{ .kind = .{ .token = main } },
+        }),
+        .unary_expression, .binary_expression => {
+            const operand = .{
+                .lhs = try genFromExpr(ast, gpa, data.lhs, r_count, instrs),
+                .rhs = if (tag == .unary_expression)
+                    undefined
+                else
+                    try genFromExpr(ast, gpa, data.rhs, r_count + 1, instrs),
+            };
+
+            const instr_tag = if (tag == .unary_expression)
+                Instr.Tag.unaryFrom(ast.tokens.items(.tag)[main])
+            else
+                Instr.Tag.binaryFrom(ast.tokens.items(.tag)[main]);
+
+            return addInstr(gpa, instrs, instr_tag, operand);
+        },
+        .call_expression => .{ .kind = .{ .reg = .{ .r_kind = .gp, .r_count = r_count } } },
+        .string_expression => @panic("TODO: storing constant strings in machine code"),
+        else => std.debug.panic("Invalid expr kind: {any}\n", .{tag}),
+    };
+}
+
+pub fn printInstrs(ast: *const Ast, instrs: InstrList.Slice) void {
+    _ = ast;
+
+    for (instrs.items(.tag), 0..) |tag, i| {
+        std.debug.print("{any} {d}\n", .{ tag, i });
+    }
 }
