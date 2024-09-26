@@ -12,13 +12,13 @@ pub const Operand = struct {
     kind: Kind,
 
     const Reg = struct {
-        r_kind: RegKind,
-        r_count: u8,
-    };
+        kind: RegKind,
+        count: u8,
 
-    const RegKind = enum(u8) {
-        sp, // stack pointer
-        gp, // general purpose
+        const RegKind = enum(u8) {
+            sp, // stack pointer
+            gp, // general purpose
+        };
     };
 
     const Kind = union(enum) {
@@ -94,7 +94,14 @@ fn genFromStmt(ast: *const Ast, gpa: Allocator, stmt: usize, instrs: *InstrList)
     switch (tag) {
         .mutable_declare,
         .constant_declare,
-        => _ = try genFromExpr(ast, gpa, data.rhs, 0, instrs),
+        => {
+            const operands = .{
+                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
+                .rhs = try genFromExpr(ast, gpa, data.rhs, 0, instrs),
+            };
+
+            _ = try addInstr(gpa, instrs, .mov, operands);
+        },
         .function_declare => {
             _ = try addInstr(gpa, instrs, .lbl, .{
                 .lhs = .{ .kind = .{ .token = data.lhs } },
@@ -119,7 +126,7 @@ fn genFromExpr(
 ) !Operand {
     const tag = ast.nodes.items(.tag)[expr];
 
-    if (tag == .number_expression) {
+    if (tag == .num_expr) {
         const tok_idx = ast.nodes.items(.main)[expr];
         const tok_loc = ast.tokens.items(.loc)[tok_idx];
 
@@ -127,7 +134,7 @@ fn genFromExpr(
         const integer = try std.fmt.parseInt(i64, num_lit, 10);
 
         const data = .{
-            .lhs = .{ .kind = .{ .reg = .{ .r_kind = .gp, .r_count = r_count } } },
+            .lhs = .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
             .rhs = .{ .kind = .{ .immediate = integer } },
         };
 
@@ -138,36 +145,69 @@ fn genFromExpr(
     const main = ast.nodes.items(.main)[expr];
 
     return switch (tag) {
-        .identifier => addInstr(gpa, instrs, .mov, .{
-            .lhs = .{ .kind = .{ .reg = .{ .r_kind = .gp, .r_count = r_count } } },
-            .rhs = .{ .kind = .{ .token = main } },
-        }),
-        .unary_expression, .binary_expression => {
+        .ident => {
+            std.debug.print("MIR_ID: {d}\n", .{main});
+
+            return addInstr(gpa, instrs, .mov, .{
+                .lhs = .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
+                .rhs = .{ .kind = .{ .token = main } },
+            });
+        },
+        .unary_expr, .binary_expr => {
             const operand = .{
                 .lhs = try genFromExpr(ast, gpa, data.lhs, r_count, instrs),
-                .rhs = if (tag == .unary_expression)
+                .rhs = if (tag == .unary_expr)
                     undefined
                 else
                     try genFromExpr(ast, gpa, data.rhs, r_count + 1, instrs),
             };
 
-            const instr_tag = if (tag == .unary_expression)
+            const instr_tag = if (tag == .unary_expr)
                 Instr.Tag.unaryFrom(ast.tokens.items(.tag)[main])
             else
                 Instr.Tag.binaryFrom(ast.tokens.items(.tag)[main]);
 
             return addInstr(gpa, instrs, instr_tag, operand);
         },
-        .call_expression => .{ .kind = .{ .reg = .{ .r_kind = .gp, .r_count = r_count } } },
-        .string_expression => @panic("TODO: storing constant strings in machine code"),
+        .call_expr => .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
+        .str_expr => @panic("TODO: storing constant strings in machine code"),
         else => std.debug.panic("Invalid expr kind: {any}\n", .{tag}),
     };
 }
 
 pub fn printInstrs(ast: *const Ast, instrs: InstrList.Slice) void {
-    _ = ast;
-
     for (instrs.items(.tag), 0..) |tag, i| {
-        std.debug.print("{any} {d}\n", .{ tag, i });
+        printTag(tag);
+
+        switch (tag) {
+            .neg, .lbl => printOperand(ast, instrs.items(.data)[i].lhs),
+            .add, .sub, .mul, .div, .mov => {
+                printOperand(ast, instrs.items(.data)[i].lhs);
+                std.debug.print(", ", .{});
+                printOperand(ast, instrs.items(.data)[i].rhs);
+            },
+            else => {},
+        }
+
+        std.debug.print("\n", .{});
+    }
+}
+
+fn printTag(tag: Instr.Tag) void {
+    if (tag != .lbl) {
+        std.debug.print("  ", .{});
+    }
+
+    std.debug.print("{s} ", .{std.enums.tagName(Instr.Tag, tag).?});
+}
+
+fn printOperand(ast: *const Ast, operand: Operand) void {
+    switch (operand.kind) {
+        .reg => |r| std.debug.print("{s}[{d}]", .{ std.enums.tagName(Operand.Reg.RegKind, r.kind).?, r.count }),
+        .token => |t| {
+            const loc = ast.tokens.items(.loc)[t];
+            std.debug.print("{s}", .{ast.source[loc.start..loc.end]});
+        },
+        .immediate => |i| std.debug.print("{d}", .{i}),
     }
 }

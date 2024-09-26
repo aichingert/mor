@@ -233,7 +233,7 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
             const rhs = try self.parseExpr(tag.precedence());
 
             node = try self.addNode(.{
-                .tag = .binary_expression,
+                .tag = .binary_expr,
                 .main = binary,
                 .data = .{
                     .lhs = node,
@@ -244,9 +244,9 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
             continue;
         }
 
-        if (self.nodes.items(.tag)[node] == .identifier and tag == .lparen) {
+        if (self.nodes.items(.tag)[node] == .ident and tag == .lparen) {
             const call = try self.addNode(.{
-                .tag = .call_expression,
+                .tag = .call_expr,
                 .main = self.nextToken(),
                 .data = .{ .lhs = node, .rhs = undefined },
             });
@@ -273,32 +273,25 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
 
 fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
     self.checkIndexOutOfBounds("finding leading expr failed");
+    const tag = self.peekTag();
 
-    switch (self.peekTag()) {
-        .identifier => return self.addNode(.{
-            .tag = .identifier,
-            .main = self.nextToken(),
-            .data = undefined,
-        }),
-        .string_lit => return self.addNode(.{
-            .tag = .string_expression,
-            .main = self.nextToken(),
-            .data = undefined,
-        }),
-        .number_lit => return self.addNode(.{
-            .tag = .number_expression,
-            .main = self.nextToken(),
-            .data = undefined,
-        }),
+    switch (tag) {
+        .identifier, .string_lit, .number_lit => {
+            return self.addNode(.{
+                .tag = if (tag == .string_lit) .str_expr else if (tag == .number_lit) .num_expr else .ident,
+                .main = self.nextToken(),
+                .data = undefined,
+            });
+        },
         else => {},
     }
 
-    if (self.peekTag().isUnaryOp()) {
+    if (tag.isUnaryOp()) {
         const unary = self.nextToken();
         const node = try self.parsePrefix();
 
         return self.addNode(.{
-            .tag = .unary_expression,
+            .tag = .unary_expr,
             .main = unary,
             .data = .{
                 .lhs = node,
@@ -307,7 +300,7 @@ fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
         });
     }
 
-    std.debug.print("{any}\n", .{self.peekTag()});
+    std.debug.print("{any}\n", .{tag});
     // TODO: replace with unit type or void
     _ = self.nextToken();
     return 0;

@@ -30,13 +30,13 @@ pub const Node = struct {
     };
 
     const Tag = enum {
-        identifier,
-        number_expression,
-        string_expression,
+        ident,
+        num_expr,
+        str_expr,
 
-        call_expression,
-        unary_expression,
-        binary_expression,
+        call_expr,
+        unary_expr,
+        binary_expr,
 
         return_stmt,
         type_declare,
@@ -106,7 +106,7 @@ pub fn print(
     calls: std.ArrayList(Call),
 ) void {
     switch (nodes.items(.tag)[idx]) {
-        .unary_expression => {
+        .unary_expr => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
@@ -119,7 +119,7 @@ pub fn print(
             print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens, calls);
             std.debug.print(")", .{});
         },
-        .binary_expression => {
+        .binary_expr => {
             std.debug.print("(", .{});
             print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens, calls);
 
@@ -142,7 +142,7 @@ pub fn print(
             }
             std.debug.print("\n", .{});
         },
-        .number_expression => {
+        .num_expr => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
@@ -151,7 +151,7 @@ pub fn print(
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
             std.debug.print("{s}", .{source[loc.start..loc.end]});
         },
-        .identifier => {
+        .ident => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
@@ -160,7 +160,7 @@ pub fn print(
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
             std.debug.print("{s}", .{source[loc.start..loc.end]});
         },
-        .string_expression => {
+        .str_expr => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
@@ -169,7 +169,7 @@ pub fn print(
             const loc = tokens.items(.loc)[nodes.items(.main)[idx]];
             std.debug.print("{s}", .{source[loc.start..loc.end]});
         },
-        .call_expression => {
+        .call_expr => {
             var i: u8 = 0;
             while (i < indent) : (i += 1) {
                 std.debug.print(" ", .{});
