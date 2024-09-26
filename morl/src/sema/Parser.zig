@@ -92,6 +92,15 @@ pub fn parse(self: *Self) std.mem.Allocator.Error!void {
 
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const ident = try self.parsePrefix();
+
+    if (self.peekTag() == .equal) {
+        return self.addNode(.{
+            .tag = .assign_stmt,
+            .main = self.nextToken(),
+            .data = .{ .lhs = ident, .rhs = try self.parseExpr(0) },
+        });
+    }
+
     self.expectNext(.colon);
 
     var type_ident: i32 = -1;

@@ -38,7 +38,9 @@ pub const Node = struct {
         unary_expr,
         binary_expr,
 
+        assign_stmt,
         return_stmt,
+
         type_declare,
         mutable_declare,
         constant_declare,
@@ -185,6 +187,16 @@ pub fn print(
                 print(arg, 0, source, funcs, nodes, tokens, calls);
             }
             std.debug.print(")", .{});
+        },
+        .assign_stmt => {
+            var i: u8 = 0;
+            while (i < indent) : (i += 1) {
+                std.debug.print(" ", .{});
+            }
+            print(nodes.items(.data)[idx].lhs, 0, source, funcs, nodes, tokens, calls);
+            std.debug.print(" = ", .{});
+            print(nodes.items(.data)[idx].rhs, 0, source, funcs, nodes, tokens, calls);
+            std.debug.print("\n", .{});
         },
         .type_declare => {
             var i: u8 = 0;

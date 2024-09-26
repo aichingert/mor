@@ -10,5 +10,5 @@ main :: () {
 
     hello :: fib(fib(o))
 
-    return;
+    return hello
 }

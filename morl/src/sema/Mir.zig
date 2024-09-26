@@ -92,6 +92,7 @@ fn genFromStmt(ast: *const Ast, gpa: Allocator, stmt: usize, instrs: *InstrList)
     const data = ast.nodes.items(.data)[stmt];
 
     switch (tag) {
+        .assign_stmt,
         .mutable_declare,
         .constant_declare,
         => {
@@ -104,7 +105,7 @@ fn genFromStmt(ast: *const Ast, gpa: Allocator, stmt: usize, instrs: *InstrList)
         },
         .function_declare => {
             _ = try addInstr(gpa, instrs, .lbl, .{
-                .lhs = .{ .kind = .{ .token = data.lhs } },
+                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
                 .rhs = undefined,
             });
 
@@ -112,7 +113,10 @@ fn genFromStmt(ast: *const Ast, gpa: Allocator, stmt: usize, instrs: *InstrList)
                 try genFromStmt(ast, gpa, func_stmt, instrs);
             }
         },
-        .return_stmt => {},
+        .return_stmt => {
+            _ = try genFromExpr(ast, gpa, data.lhs, 0, instrs);
+            try instrs.append(gpa, .{ .tag = .ret, .data = undefined });
+        },
         else => std.debug.panic("Invalid statment type: {any}\n", .{tag}),
     }
 }
@@ -145,12 +149,20 @@ fn genFromExpr(
     const main = ast.nodes.items(.main)[expr];
 
     return switch (tag) {
-        .ident => {
-            std.debug.print("MIR_ID: {d}\n", .{main});
+        .ident => addInstr(gpa, instrs, .mov, .{
+            .lhs = .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
+            .rhs = .{ .kind = .{ .token = main } },
+        }),
+        .call_expr => {
+            for (ast.calls.items[data.rhs].args.items, r_count..) |c_expr, reg| {
+                _ = try genFromExpr(ast, gpa, c_expr, @intCast(reg), instrs);
+            }
 
-            return addInstr(gpa, instrs, .mov, .{
-                .lhs = .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
-                .rhs = .{ .kind = .{ .token = main } },
+            // TODO: figure out how to tell it to use the return value or how to
+            // generally handle state between functions with registers and stuff
+            return addInstr(gpa, instrs, .call, .{
+                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
+                .rhs = undefined,
             });
         },
         .unary_expr, .binary_expr => {
@@ -169,8 +181,6 @@ fn genFromExpr(
 
             return addInstr(gpa, instrs, instr_tag, operand);
         },
-        .call_expr => .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
-        .str_expr => @panic("TODO: storing constant strings in machine code"),
         else => std.debug.panic("Invalid expr kind: {any}\n", .{tag}),
     };
 }
@@ -180,7 +190,7 @@ pub fn printInstrs(ast: *const Ast, instrs: InstrList.Slice) void {
         printTag(tag);
 
         switch (tag) {
-            .neg, .lbl => printOperand(ast, instrs.items(.data)[i].lhs),
+            .lbl, .neg, .call => printOperand(ast, instrs.items(.data)[i].lhs),
             .add, .sub, .mul, .div, .mov => {
                 printOperand(ast, instrs.items(.data)[i].lhs);
                 std.debug.print(", ", .{});
