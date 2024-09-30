@@ -92,10 +92,7 @@ fn genFromStmt(ast: *const Ast, gpa: Allocator, stmt: usize, instrs: *InstrList)
     const data = ast.nodes.items(.data)[stmt];
 
     switch (tag) {
-        .assign_stmt,
-        .mutable_declare,
-        .constant_declare,
-        => {
+        .assign_stmt, .mutable_declare, .constant_declare => {
             const operands = .{
                 .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
                 .rhs = try genFromExpr(ast, gpa, data.rhs, 0, instrs),

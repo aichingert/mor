@@ -81,6 +81,7 @@ fn addCall(self: *Self, call: Ast.Call) std.mem.Allocator.Error!usize {
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
         try self.stmts.append(switch (self.peekTag()) {
+            .kw_if => try self.parseCondition(),
             .identifier => try self.parseDeclare(),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
@@ -88,6 +89,22 @@ pub fn parse(self: *Self) std.mem.Allocator.Error!void {
             },
         });
     }
+}
+
+fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
+    self.expectNext(.kw_if);
+
+    _ = try self.parseExpr(0);
+
+    self.expectNext(.lbrace);
+
+    while (self.peekTag() != .rbrace) {
+        try self.parse();
+    }
+
+    self.expectNext(.rbrace);
+
+    @panic("TODO");
 }
 
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
@@ -213,6 +230,7 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
 
     while (self.peekTag() != .rbrace) {
         switch (self.peekTag()) {
+            .kw_if => @panic("TODO"), // try self.parseCondition(),
             .kw_return => try body.append(try self.addNode(.{
                 .tag = .return_stmt,
                 .main = self.nextToken(),

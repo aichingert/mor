@@ -13,6 +13,11 @@ pub const Token = struct {
         identifier,
         number_lit,
         string_lit,
+
+        less,
+        less_eq,
+        greater,
+        greater_eq,
         plus,
         minus,
         slash,
@@ -31,6 +36,8 @@ pub const Token = struct {
         comma,
         semicolon,
 
+        kw_if,
+        kw_else,
         kw_return,
 
         invalid,
@@ -45,7 +52,7 @@ pub const Token = struct {
 
         pub fn isBinaryOp(self: Tag) bool {
             return switch (self) {
-                .plus, .minus, .slash, .asterisk => true,
+                .plus, .minus, .slash, .asterisk, .less, .less_eq, .greater, .greater_eq => true,
                 else => false,
             };
         }
@@ -144,6 +151,8 @@ pub const Lexer = struct {
             return switch (self.source[self.index]) {
                 '+' => self.genToken(.plus, result.loc.start),
                 '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
+                '<' => self.genTokenIfNextIs('=', .less_eq, .less, result.loc.start),
+                '>' => self.genTokenIfNextIs('=', .greater_eq, .greater, result.loc.start),
                 '/' => self.genToken(.slash, result.loc.start),
                 '*' => self.genToken(.asterisk, result.loc.start),
                 ':' => self.genToken(.colon, result.loc.start),
@@ -169,7 +178,11 @@ pub const Lexer = struct {
                     var token = self.genToken(.identifier, result.loc.start);
                     const eql = std.mem.eql;
 
-                    if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
+                    if (eql(u8, self.source[token.loc.start..token.loc.end], "if")) {
+                        token.tag = .kw_if;
+                    } else if (eql(u8, self.source[token.loc.start..token.loc.end], "else")) {
+                        token.tag = .kw_else;
+                    } else if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
                         token.tag = .kw_return;
                     }
 
