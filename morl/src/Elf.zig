@@ -7,17 +7,6 @@ const Mir = @import("sema/Mir.zig");
 
 const base_point: u64 = 0x400000;
 
-// Name             Size    Alignment   Purpose
-// Elf64_Addr       8       8           Unsigned program address
-// Elf64_Half       2       2           Unsigned small integer
-// Elf64_Off        8       8           Unsigned file offset
-// Elf64_Sword      4       4           Signed medium integer
-// Elf64_Sxword     8       8           Signed large integer
-// Elf64_Word       4       4           Unsigned medium integer
-// Elf64_Xword      8       8           Unsigned large integer
-// Elf64_Byte       1       1           Unsigned tiny integer
-// Elf64_Section    2       2           Section index (unsigned)
-
 const ElfHeader = struct {
     magic: [4]u8 = "\x7fELF".*,
     class: u8 = 2,
