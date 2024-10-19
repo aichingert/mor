@@ -3,7 +3,9 @@
 // https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
 
 const std = @import("std");
+
 const Mir = @import("sema/Mir.zig");
+const Asm = @import("coge/linux_x86_64.zig");
 
 const base_point: u64 = 0x400000;
 
@@ -117,24 +119,8 @@ const ProgHeader = struct {
 };
 
 pub fn genExe(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
-    var machine_code = std.ArrayList(u8).init(gpa);
+    var machine_code = try Asm.genCode(gpa, mir);
     defer machine_code.deinit();
-
-    for (mir.items(.tag), 0..) |tag, i| {
-        _ = i;
-
-        switch (tag) {
-            .lbl, .call, .ret, .jmp => {}, // TODO:
-            .mov => {},
-            else => {},
-        }
-    }
-
-    const sys_exit = [_]u8{
-        0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00,
-        0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00,
-        0x0f, 0x05,
-    };
 
     const header_off = @sizeOf(ElfHeader) + @sizeOf(ProgHeader);
     const entry_off = base_point + header_off;
@@ -156,6 +142,5 @@ pub fn genExe(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
         try bit_stream.writeBits(byte, 8);
     }
 
-    _ = try bit_stream.write(&sys_exit);
     try bit_stream.flushBits();
 }

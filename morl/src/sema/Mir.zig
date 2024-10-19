@@ -32,7 +32,7 @@ pub const Instr = struct {
     tag: Tag,
     data: Data,
 
-    const Data = struct {
+    pub const Data = struct {
         lhs: Operand,
         rhs: Operand,
     };
