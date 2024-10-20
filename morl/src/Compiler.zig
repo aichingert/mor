@@ -16,10 +16,11 @@ pub fn compile(path: []const u8, allocator: std.mem.Allocator) !void {
     var ast = try Ast.init(allocator, source);
     defer ast.deinit(allocator);
 
-    var mir: Mir.InstrList.Slice = try Mir.genFromAst(allocator, ast);
-    defer mir.deinit(allocator);
+    var mir = Mir.init(allocator, ast);
+    try mir.genInstructions();
+    defer mir.instructions.deinit();
 
-    Mir.printInstrs(&ast, mir);
+    //Mir.printInstrs(&ast, mir);
 
     try Elf.genExe(allocator, mir);
 }

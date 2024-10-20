@@ -118,7 +118,7 @@ const ProgHeader = struct {
     }
 };
 
-pub fn genExe(gpa: std.mem.Allocator, mir: Mir.InstrList.Slice) !void {
+pub fn genExe(gpa: std.mem.Allocator, mir: Mir) !void {
     var machine_code = try Asm.genCode(gpa, mir);
     defer machine_code.deinit();
 
