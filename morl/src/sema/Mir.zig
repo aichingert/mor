@@ -14,19 +14,25 @@ instructions: std.ArrayList(Instr),
 const Context = struct {
     sp: i32,
     locals: std.StringHashMap(i32),
+
+    fn pushLocal(self: *Context, ident: []const u8) !void {
+        const n = self.sp;
+        try self.locals.put(ident, n);
+        self.sp -= 8;
+    }
 };
 
 pub const Operand = union(enum) {
     register: u8,
     variable: i32,
-    immediate: u64,
+    immediate: i64,
 };
 
 pub const Instr = struct {
     tag: Tag,
 
-    lhs: Operand,
-    rhs: Operand,
+    lhs: ?Operand,
+    rhs: ?Operand,
 
     pub const Tag = enum {
         neg,
@@ -69,58 +75,73 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
 pub fn genInstructions(self: *Self) !void {
     self.instructions = std.ArrayList(Instr).init(self.gpa);
 
+    var ctx: Context = .{
+        .sp = 0,
+        .locals = std.StringHashMap(i32).init(self.gpa),
+    };
+    defer ctx.locals.deinit();
+
     // TODO: support multiple top level statements (like other functions and imports)
-    try self.genFromStatement(0);
+    try self.genFromStatement(self.ast.stmts.items[0], &ctx);
+
+    var it = ctx.locals.valueIterator();
+    while (it.next()) |item| {
+        std.debug.print("{any}\n", .{item.*});
+    }
 }
 
-fn genFromStatement(self: *Self, stmt: usize) !void {
+fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
+    const data = self.ast.nodes.items(.data)[stmt];
+
     switch (self.ast.nodes.items(.tag)[stmt]) {
-        .function_declare => {},
+        .mutable_declare, .constant_declare => {
+            // a := 10
+
+            const tok = self.ast.nodes.items(.main)[data.lhs];
+            const loc = self.ast.tokens.items(.loc)[tok];
+            const ident = self.ast.source[loc.start..loc.end];
+
+            try self.genFromExpression(data.rhs, ctx);
+
+            try ctx.pushLocal(ident);
+            std.debug.print("{s}\n", .{ident});
+        },
+        .assign_stmt => {},
+        .function_declare => {
+            for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
+                try self.genFromStatement(func_stmt, ctx);
+            }
+        },
         else => {},
     }
 }
 
-//pub fn genFromAst(gpa: std.mem.Allocator, ast: Ast) !InstrList.Slice {
-//    var instructions = InstrList{};
-//
-//    for (ast.stmts.items) |item| {
-//        try genFromStmt(gpa, &ast, item, &instructions);
-//    }
-//
-//    return instructions.toOwnedSlice();
-//}
-//
-//fn genFromStmt(gpa: Allocator, ast: *const Ast, stmt: usize, instrs: *InstrList) !void {
-//    const tag = ast.nodes.items(.tag)[stmt];
-//    const data = ast.nodes.items(.data)[stmt];
-//
-//    switch (tag) {
-//        .assign_stmt, .mutable_declare, .constant_declare => {
-//            const operands = .{
-//                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
-//                .rhs = try genFromExpr(ast, gpa, data.rhs, 0, instrs),
-//            };
-//
-//            _ = try addInstr(gpa, instrs, .mov, operands);
-//        },
-//        .function_declare => {
-//            _ = try addInstr(gpa, instrs, .lbl, .{
-//                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
-//                .rhs = undefined,
-//            });
-//
-//            for (ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
-//                try genFromStmt(ast, gpa, func_stmt, instrs);
-//            }
-//        },
-//        .return_stmt => {
-//            _ = try genFromExpr(ast, gpa, data.lhs, 0, instrs);
-//            try instrs.append(gpa, .{ .tag = .ret, .data = undefined });
-//        },
-//        else => std.debug.panic("Invalid statment type: {any}\n", .{tag}),
-//    }
-//}
-//
+fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
+    const tag = self.ast.nodes.items(.tag)[expr];
+    const data = self.ast.nodes.items(.data)[expr];
+    const main = self.ast.nodes.items(.main)[expr];
+
+    switch (tag) {
+        .num_expr => {
+            const loc = self.ast.tokens.items(.loc)[main];
+            const lit = self.ast.source[loc.start..loc.end];
+            const num = try std.fmt.parseInt(i64, lit, 10);
+
+            try self.instructions.append(.{
+                .tag = .push,
+                .lhs = .{ .immediate = num },
+                .rhs = null,
+            });
+
+            std.debug.print("{d}\n", .{num});
+        },
+        else => {
+            _ = ctx;
+            _ = data;
+        },
+    }
+}
+
 //fn genFromExpr(
 //    ast: *const Ast,
 //    gpa: Allocator,
@@ -184,6 +205,48 @@ fn genFromStatement(self: *Self, stmt: usize) !void {
 //        else => std.debug.panic("Invalid expr kind: {any}\n", .{tag}),
 //    };
 //}
+//
+//pub fn genFromAst(gpa: std.mem.Allocator, ast: Ast) !InstrList.Slice {
+//    var instructions = InstrList{};
+//
+//    for (ast.stmts.items) |item| {
+//        try genFromStmt(gpa, &ast, item, &instructions);
+//    }
+//
+//    return instructions.toOwnedSlice();
+//}
+//
+//fn genFromStmt(gpa: Allocator, ast: *const Ast, stmt: usize, instrs: *InstrList) !void {
+//    const tag = ast.nodes.items(.tag)[stmt];
+//    const data = ast.nodes.items(.data)[stmt];
+//
+//    switch (tag) {
+//        .assign_stmt, .mutable_declare, .constant_declare => {
+//            const operands = .{
+//                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
+//                .rhs = try genFromExpr(ast, gpa, data.rhs, 0, instrs),
+//            };
+//
+//            _ = try addInstr(gpa, instrs, .mov, operands);
+//        },
+//        .function_declare => {
+//            _ = try addInstr(gpa, instrs, .lbl, .{
+//                .lhs = .{ .kind = .{ .token = ast.nodes.items(.main)[data.lhs] } },
+//                .rhs = undefined,
+//            });
+//
+//            for (ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
+//                try genFromStmt(ast, gpa, func_stmt, instrs);
+//            }
+//        },
+//        .return_stmt => {
+//            _ = try genFromExpr(ast, gpa, data.lhs, 0, instrs);
+//            try instrs.append(gpa, .{ .tag = .ret, .data = undefined });
+//        },
+//        else => std.debug.panic("Invalid statment type: {any}\n", .{tag}),
+//    }
+//}
+//
 //
 //pub fn printInstrs(ast: *const Ast, instrs: InstrList.Slice) void {
 //    for (instrs.items(.tag), 0..) |tag, i| {
