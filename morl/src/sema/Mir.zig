@@ -14,12 +14,6 @@ instructions: std.ArrayList(Instr),
 const Context = struct {
     sp: i32,
     locals: std.StringHashMap(i32),
-
-    fn pushLocal(self: *Context, ident: []const u8) !void {
-        const n = self.sp;
-        try self.locals.put(ident, n);
-        self.sp -= 8;
-    }
 };
 
 pub const Operand = union(enum) {
@@ -102,9 +96,12 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             const ident = self.ast.source[loc.start..loc.end];
 
             try self.genFromExpression(data.rhs, ctx);
+            try self.instructions.append(.{ .tag = .pop, .lhs = .{ .register = 0 }, .rhs = null });
+            ctx.sp += 8;
 
-            try ctx.pushLocal(ident);
-            std.debug.print("{s}\n", .{ident});
+            try self.instructions.append(.{ .tag = .push, .lhs = .{ .register = 0 }, .rhs = null });
+            try ctx.locals.put(ident, ctx.sp);
+            ctx.sp -= 8;
         },
         .assign_stmt => {},
         .function_declare => {
@@ -132,11 +129,26 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .lhs = .{ .immediate = num },
                 .rhs = null,
             });
+            ctx.sp -= 8;
+        },
+        .ident => {
+            const loc = self.ast.tokens.items(.loc)[main];
+            const ident = self.ast.source[loc.start..loc.end];
 
-            std.debug.print("{d}\n", .{num});
+            const value = ctx.locals.get(ident);
+            if (value == null) {
+                std.debug.print("TODO: better debug info but use of unknown var\n", .{});
+                std.process.exit(1);
+            }
+
+            try self.instructions.append(.{
+                .tag = .push,
+                .lhs = .{ .variable = ctx.sp - (value.? - 8) },
+                .rhs = null,
+            });
+            ctx.sp -= 8;
         },
         else => {
-            _ = ctx;
             _ = data;
         },
     }
@@ -150,21 +162,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
 //    instrs: *InstrList,
 //) !Operand {
 //    const tag = ast.nodes.items(.tag)[expr];
-//
-//    if (tag == .num_expr) {
-//        const tok_idx = ast.nodes.items(.main)[expr];
-//        const tok_loc = ast.tokens.items(.loc)[tok_idx];
-//
-//        const num_lit = ast.source[tok_loc.start..tok_loc.end];
-//        const integer = try std.fmt.parseInt(i64, num_lit, 10);
-//
-//        const data = .{
-//            .lhs = .{ .kind = .{ .reg = .{ .kind = .gp, .count = r_count } } },
-//            .rhs = .{ .kind = .{ .immediate = integer } },
-//        };
-//
-//        return addInstr(gpa, instrs, .mov, data);
-//    }
 //
 //    const data = ast.nodes.items(.data)[expr];
 //    const main = ast.nodes.items(.main)[expr];
