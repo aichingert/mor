@@ -20,11 +20,7 @@ pub fn compile(path: []const u8, allocator: std.mem.Allocator) !void {
     try mir.genInstructions();
     defer mir.instructions.deinit();
 
-    for (mir.instructions.items) |item| {
-        std.debug.print("{any}\n", .{item});
-    }
-
-    //Mir.printInstrs(&ast, mir);
+    mir.printInstrs();
 
     try Elf.genExe(allocator, mir);
 }
