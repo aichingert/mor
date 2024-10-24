@@ -3,10 +3,11 @@ section .text
 global _start
 
 _start:
-    push 20
-    push 40
+    mov rax, 20
+    mov rcx, 30
 
-    mov rdi, [rsp + 8]
+    add rax, rcx
+    mov rdi, rax
 
     mov rax, 60
     syscall

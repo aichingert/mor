@@ -3,15 +3,17 @@ const std = @import("std");
 const Elf = @import("../Elf.zig");
 const Mir = @import("../sema/Mir.zig");
 
+// /r reg and r/m are registers
+
 pub fn genCode(gpa: std.mem.Allocator, mir: Mir) !std.ArrayList(u8) {
     var machine_code = std.ArrayList(u8).init(gpa);
 
     for (mir.instructions.items) |item| {
         switch (item.tag) {
-            .pop => {
-                std.debug.print("pop\n", .{});
-            },
-            .push => try push(item, &machine_code),
+            .pop => try pop(item.lhs.?, &machine_code),
+            .push => try push(item.lhs.?, &machine_code),
+            .add => try add(item.lhs.?, item.rhs.?, &machine_code),
+            .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
             else => {},
         }
     }
@@ -49,19 +51,33 @@ fn moveImmediate(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
     try buffer.appendSlice(&buf);
 }
 
-fn push(instr: Mir.Instr, buffer: *std.ArrayList(u8)) !void {
-    switch (instr.lhs.?) {
-        .immediate => {
-            try moveImmediate(0, instr.lhs.?.immediate, buffer);
-            try pushReg(0, buffer);
+fn pop(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    switch (lhs) {
+        .immediate => std.debug.panic("Pop immediate?\n", .{}),
+        .variable => {
+            // 8F /0
+            //try buffer.append(0x8F);
+            //try buffer.append(0xB4);
+            //try buffer.append(0x24);
+
+            //var buf: [4]u8 = undefined;
+            //std.mem.writeInt(u32, &buf, lhs.variable, .little);
+
+            //try buffer.appendSlice(&buf);
         },
-        .variable => try pushVariable(instr.lhs.?.variable, buffer),
-        .register => try pushReg(instr.lhs.?.register, buffer),
+        .register => try buffer.append(0x58 + lhs.register),
     }
 }
 
-fn pushReg(reg: u8, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x50 + reg);
+fn push(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    switch (lhs) {
+        .immediate => {
+            try moveImmediate(0, lhs.immediate, buffer);
+            try buffer.append(0x50);
+        },
+        .variable => try pushVariable(lhs.variable, buffer),
+        .register => try buffer.append(0x50 + lhs.register),
+    }
 }
 
 fn pushVariable(offset: u32, buffer: *std.ArrayList(u8)) !void {
@@ -86,4 +102,30 @@ fn pushVariable(offset: u32, buffer: *std.ArrayList(u8)) !void {
     std.mem.writeInt(u32, &buf, offset, .little);
 
     try buffer.appendSlice(&buf);
+}
+
+fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    // NOTE: currently only implementing reg + reg since the intermediate representation is very simple and
+    // transforms everything in that form
+
+    // Rex.W
+    // 01001000
+    try buffer.append(0x48);
+    try buffer.append(0x01);
+    // ModR/M
+    // MR => r/m | reg
+    try buffer.append(0b11000000 + (rhs.register << 3) + lhs.register);
+}
+
+fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    // NOTE: currently only implementing reg + reg since the intermediate representation is very simple and
+    // transforms everything in that form
+
+    // Rex.W
+    // 01001000
+    try buffer.append(0x48);
+    try buffer.append(0x29);
+    // ModR/M
+    // MR => r/m | reg
+    try buffer.append(0b11000000 + (rhs.register << 3) + lhs.register);
 }
