@@ -24,7 +24,7 @@ pub const Operand = union(enum) {
     fn print(self: Operand) void {
         switch (self) {
             .register => std.debug.print("rg{d}", .{self.register}),
-            .variable => std.debug.print("[sp - {d}]", .{self.variable}),
+            .variable => std.debug.print("[sp + {d}]", .{self.variable}),
             .immediate => std.debug.print("{d}", .{self.immediate}),
         }
     }
@@ -104,12 +104,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             const ident = self.ast.source[loc.start..loc.end];
 
             try self.genFromExpression(data.rhs, ctx);
-            try self.instructions.append(.{ .tag = .pop, .lhs = .{ .register = 0 }, .rhs = null });
-            ctx.sp += 8;
-
-            try self.instructions.append(.{ .tag = .push, .lhs = .{ .register = 0 } });
             try ctx.locals.put(ident, ctx.sp);
-            ctx.sp -= 8;
         },
         .assign_stmt => {},
         .function_declare => {
@@ -133,7 +128,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             const num = try std.fmt.parseInt(i64, lit, 10);
 
             try self.instructions.append(.{ .tag = .push, .lhs = .{ .immediate = num } });
-            ctx.sp -= 8;
+            ctx.sp += 8;
         },
         .ident => {
             const loc = self.ast.tokens.items(.loc)[main];
@@ -146,7 +141,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             }
 
             try self.instructions.append(.{ .tag = .push, .lhs = .{ .variable = ctx.sp - (value.? - 8) } });
-            ctx.sp -= 8;
+            ctx.sp += 8;
         },
         .binary_expr => {
             const tag = Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main]);
@@ -162,7 +157,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .tag = .pop,
                 .lhs = .{ .register = 1 },
             });
-            ctx.sp += 16;
+            ctx.sp -= 16;
 
             try self.instructions.append(.{
                 .tag = tag,
@@ -173,7 +168,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .tag = .push,
                 .lhs = .{ .register = 0 },
             });
-            ctx.sp -= 8;
+            ctx.sp += 8;
         },
         .unary_expr => {
             const tag = Instr.Tag.unaryFrom(self.ast.tokens.items(.tag)[main]);
@@ -184,7 +179,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .tag = .pop,
                 .lhs = .{ .register = 0 },
             });
-            ctx.sp += 8;
+            ctx.sp -= 8;
 
             try self.instructions.append(.{
                 .tag = tag,
@@ -194,7 +189,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .tag = .push,
                 .lhs = .{ .register = 0 },
             });
-            ctx.sp -= 8;
+            ctx.sp += 8;
         },
         else => {},
     }

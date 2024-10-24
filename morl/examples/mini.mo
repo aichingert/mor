@@ -1,6 +1,6 @@
 main :: () {
-    var := 10 + 20
+    var := 10 
+    other := 30
 
-    other := var
-    anoth := var
+    anoth := 10 + var * other
 }
