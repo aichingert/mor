@@ -12,13 +12,13 @@ gpa: std.mem.Allocator,
 instructions: std.ArrayList(Instr),
 
 const Context = struct {
-    sp: i32,
-    locals: std.StringHashMap(i32),
+    sp: u32,
+    locals: std.StringHashMap(u32),
 };
 
 pub const Operand = union(enum) {
     register: u8,
-    variable: i32,
+    variable: u32,
     immediate: i64,
 
     fn print(self: Operand) void {
@@ -79,7 +79,7 @@ pub fn genInstructions(self: *Self) !void {
 
     var ctx: Context = .{
         .sp = 0,
-        .locals = std.StringHashMap(i32).init(self.gpa),
+        .locals = std.StringHashMap(u32).init(self.gpa),
     };
     defer ctx.locals.deinit();
 
