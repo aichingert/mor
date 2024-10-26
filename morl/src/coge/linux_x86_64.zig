@@ -5,7 +5,8 @@ const Mir = @import("../sema/Mir.zig");
 
 // /r reg and r/m are registers
 
-pub fn genCode(gpa: std.mem.Allocator, mir: Mir) !std.ArrayList(u8) {
+pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8) {
+    _ = start;
     var machine_code = std.ArrayList(u8).init(gpa);
 
     for (mir.instructions.items) |item| {
@@ -14,6 +15,7 @@ pub fn genCode(gpa: std.mem.Allocator, mir: Mir) !std.ArrayList(u8) {
             .push => try push(item.lhs.?, &machine_code),
             .add => try add(item.lhs.?, item.rhs.?, &machine_code),
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
+            .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
             else => {},
         }
     }
@@ -118,9 +120,6 @@ fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 }
 
 fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    // NOTE: currently only implementing reg + reg since the intermediate representation is very simple and
-    // transforms everything in that form
-
     // Rex.W
     // 01001000
     try buffer.append(0x48);
@@ -128,4 +127,31 @@ fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     // ModR/M
     // MR => r/m | reg
     try buffer.append(0b11000000 + (rhs.register << 3) + lhs.register);
+}
+
+fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    _ = rhs;
+
+    // Rex.W
+    // 01001000
+    try buffer.append(0x48);
+    try buffer.append(0xF7);
+    // ModR/M
+    // MR => r/m | reg
+    try buffer.append(0b11100000 + lhs.register);
+}
+
+fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    _ = rhs;
+    // TODO: implement mov for operand
+
+    // mov(lhs) ; try moveImmediate(2, imm64: i64, buffer: *std.ArrayList(u8)) !void {
+
+    // Rex.W
+    // 01001000
+    try buffer.append(0x48);
+    try buffer.append(0xF7);
+    // ModR/M
+    // MR => r/m | reg
+    try buffer.append(0b11111000 + lhs.register);
 }

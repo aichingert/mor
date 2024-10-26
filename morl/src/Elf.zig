@@ -119,11 +119,12 @@ const ProgHeader = struct {
 };
 
 pub fn genExe(gpa: std.mem.Allocator, mir: Mir) !void {
-    var machine_code = try Asm.genCode(gpa, mir);
-    defer machine_code.deinit();
-
     const header_off = @sizeOf(ElfHeader) + @sizeOf(ProgHeader);
     const entry_off = base_point + header_off;
+
+    var machine_code = try Asm.genCode(gpa, mir, entry_off);
+    defer machine_code.deinit();
+
     const file_size = header_off + machine_code.items.len;
 
     var e_header = ElfHeader.init(entry_off);
