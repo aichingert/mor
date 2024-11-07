@@ -22,6 +22,7 @@ pub const Token = struct {
         minus,
         slash,
         asterisk,
+        dollar,
 
         lparen,
         rparen,
@@ -163,6 +164,7 @@ pub const Lexer = struct {
                 ')' => self.genToken(.rparen, result.loc.start),
                 '{' => self.genToken(.lbrace, result.loc.start),
                 '}' => self.genToken(.rbrace, result.loc.start),
+                '$' => self.genToken(.dollar, result.loc.start),
                 '0'...'9' => {
                     while (self.isNumber()) : (self.index += 1) {}
                     return self.genToken(.number_lit, result.loc.start);

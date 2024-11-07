@@ -107,6 +107,36 @@ fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
     @panic("TODO");
 }
 
+fn parseCompMacroCall(self: *Self) std.mem.Allocator.Error!usize {
+    self.expectNext(.dollar);
+
+    const ident = try self.parsePrefix();
+    std.debug.print("{any}\n", .{self.nodes.items(.tag)[ident]});
+
+    const call = try self.addNode(.{
+        .tag = .macro_call_expr,
+        .main = undefined,
+        .data = .{ .lhs = ident, .rhs = undefined },
+    });
+
+    self.expectNext(.lparen);
+
+    var args = std.ArrayList(usize).init(self.gpa);
+
+    while (self.peekTag() != .rparen) {
+        try args.append(try self.parseExpr(0));
+
+        if (self.peekTag() != .rparen) {
+            self.expectNext(.comma);
+        }
+    }
+
+    self.expectNext(.rparen);
+    self.nodes.items(.data)[call].rhs = try self.addCall(.{ .args = args });
+
+    return call;
+}
+
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const ident = try self.parsePrefix();
 
@@ -236,6 +266,7 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
                 .main = self.nextToken(),
                 .data = .{ .lhs = try self.parseExpr(0), .rhs = undefined },
             })),
+            .dollar => try body.append(try self.parseCompMacroCall()),
             .identifier => try body.append(try self.parseDeclare()),
             else => {
                 std.debug.print("{d}\n", .{self.tok_i});

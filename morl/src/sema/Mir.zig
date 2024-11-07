@@ -107,6 +107,23 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             try ctx.locals.put(ident, ctx.sp);
         },
         .assign_stmt => {},
+        .macro_call_expr => {
+            const lhs = self.ast.nodes.items(.data)[stmt].lhs;
+            const man = self.ast.nodes.items(.main)[lhs];
+            const loc = self.ast.tokens.items(.loc)[man];
+            const lit = self.ast.source[loc.start..loc.end];
+
+            if (std.mem.eql(u8, lit, "asm")) {
+                for (self.ast.calls.items) |call| {
+                    std.debug.print("{any}\n", call);
+                }
+            } else {
+                std.debug.print("{s}\n", .{lit});
+                @panic("Error: invalid compile macro");
+            }
+
+            std.debug.print("CALL: {s}\n", .{lit});
+        },
         .function_declare => {
             for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
                 try self.genFromStatement(func_stmt, ctx);
