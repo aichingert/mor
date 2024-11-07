@@ -1,5 +1,9 @@
 main :: () {
-    var := 10 
+    var := 42
+
+    $asm(
+        "mov rax, var"
+    )
 
     $asm(
         "mov rax, 60", 

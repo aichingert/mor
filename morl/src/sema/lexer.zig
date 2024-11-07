@@ -173,7 +173,11 @@ pub const Lexer = struct {
                     self.index += 1;
 
                     while (self.isWithinString()) : (self.index += 1) {}
-                    return self.genToken(.string_lit, result.loc.start);
+
+                    defer self.index += 1;
+                    self.index -= 1;
+
+                    return self.genToken(.string_lit, result.loc.start + 1);
                 },
                 'a'...'z', 'A'...'Z' => {
                     while (self.isIdentifier()) : (self.index += 1) {}

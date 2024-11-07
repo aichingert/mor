@@ -28,6 +28,28 @@ pub const Operand = union(enum) {
             .immediate => std.debug.print("{d}", .{self.immediate}),
         }
     }
+
+    fn registerFromIdent(ident: []const u8) ?Operand {
+        if (std.mem.eql(u8, ident, "rax")) {
+            return .{ .register = 0b000 };
+        } else if (std.mem.eql(u8, ident, "rcx")) {
+            return .{ .register = 0b001 };
+        } else if (std.mem.eql(u8, ident, "rdx")) {
+            return .{ .register = 0b010 };
+        } else if (std.mem.eql(u8, ident, "rbx")) {
+            return .{ .register = 0b011 };
+        } else if (std.mem.eql(u8, ident, "rsp")) {
+            return .{ .register = 0b100 };
+        } else if (std.mem.eql(u8, ident, "rbp")) {
+            return .{ .register = 0b101 };
+        } else if (std.mem.eql(u8, ident, "rsi")) {
+            return .{ .register = 0b110 };
+        } else if (std.mem.eql(u8, ident, "rdi")) {
+            return .{ .register = 0b111 };
+        }
+
+        return null;
+    }
 };
 
 pub const Instr = struct {
@@ -46,6 +68,8 @@ pub const Instr = struct {
         mov,
         pop,
         push,
+
+        syscall,
 
         fn unaryFrom(token: lex.Token.Tag) Tag {
             switch (token) {
@@ -108,15 +132,12 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
         },
         .assign_stmt => {},
         .macro_call_expr => {
-            const lhs = self.ast.nodes.items(.data)[stmt].lhs;
-            const man = self.ast.nodes.items(.main)[lhs];
+            const man = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[man];
             const lit = self.ast.source[loc.start..loc.end];
 
             if (std.mem.eql(u8, lit, "asm")) {
-                for (self.ast.calls.items) |call| {
-                    std.debug.print("{any}\n", call);
-                }
+                try self.genFromMacroCall(&self.ast.calls.items[data.rhs], ctx);
             } else {
                 std.debug.print("{s}\n", .{lit});
                 @panic("Error: invalid compile macro");
@@ -209,6 +230,56 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             ctx.sp += 8;
         },
         else => {},
+    }
+}
+
+fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
+    for (macro_call.args.items) |arg| {
+        if (self.ast.nodes.items(.tag)[arg] != .str_expr) @panic("ERROR: macro expected str_expr");
+
+        const loc = self.ast.tokens.items(.loc)[self.ast.nodes.items(.main)[arg]];
+        const val = self.ast.source[loc.start..loc.end];
+
+        var it = std.mem.split(u8, val, " ");
+        const op = it.next().?;
+
+        if (std.mem.eql(u8, op, "mov")) {
+            var instr: Instr = .{ .tag = .mov };
+
+            const lhs = it.next().?;
+            const rhs = it.next().?;
+
+            instr.lhs = Operand.registerFromIdent(lhs[0 .. lhs.len - 1]);
+            instr.rhs = Operand.registerFromIdent(rhs);
+
+            if (instr.lhs == null) {
+                const res = std.fmt.parseInt(i64, lhs[0 .. lhs.len - 1], 10);
+
+                if (res == error.InvalidCharacter) {
+                    const value = ctx.locals.get(lhs[0 .. lhs.len - 1]);
+                    if (value == null) @panic("ERROR: variable is not defined lhs");
+
+                    instr.lhs = .{ .variable = ctx.sp - (value.? - 8) };
+                } else {
+                    instr.lhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
+                }
+            }
+
+            if (instr.rhs == null) {
+                const res = std.fmt.parseInt(i64, rhs, 10);
+
+                if (res == error.InvalidCharacter) {
+                    const value = ctx.locals.get(rhs);
+                    if (value == null) @panic("ERROR: variable is not defined lhs");
+
+                    instr.rhs = .{ .variable = ctx.sp - (value.? - 8) };
+                } else {
+                    instr.rhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
+                }
+            }
+
+            try self.instructions.append(instr);
+        } else if (std.mem.eql(u8, op, "syscall")) {} else {}
     }
 }
 

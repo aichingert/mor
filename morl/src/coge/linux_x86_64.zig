@@ -28,6 +28,26 @@ pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8
     return machine_code;
 }
 
+fn move(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs == .immediate) @panic("ERROR(compiler): cannot mov into immediate");
+
+    if (lhs == .variable) {
+        switch (rhs) {
+            .immediate => {},
+            .register => {},
+            .variable => {},
+        }
+    } else {
+        switch (rhs) {
+            .immediate => {},
+            .register => {},
+            .variable => {},
+        }
+    }
+
+    _ = buffer;
+}
+
 fn moveImmediate(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
     // 0x40
     // B8 + rd io
