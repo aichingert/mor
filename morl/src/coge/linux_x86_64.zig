@@ -11,11 +11,15 @@ pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8
 
     for (mir.instructions.items) |item| {
         switch (item.tag) {
+            .mov => try mov(item.lhs.?, item.rhs.?, &machine_code),
             .pop => try pop(item.lhs.?, &machine_code),
             .push => try push(item.lhs.?, &machine_code),
+
             .add => try add(item.lhs.?, item.rhs.?, &machine_code),
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
             .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
+
+            .syscall => try syscall(&machine_code),
             else => {},
         }
     }
@@ -28,27 +32,25 @@ pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8
     return machine_code;
 }
 
-fn move(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs == .immediate) @panic("ERROR(compiler): cannot mov into immediate");
 
     if (lhs == .variable) {
         switch (rhs) {
-            .immediate => {},
-            .register => {},
+            .immediate => try movVarImm(lhs.variable, rhs.immediate, buffer),
+            .register => try movVarReg(lhs.variable, rhs.register, buffer),
             .variable => {},
         }
     } else {
         switch (rhs) {
-            .immediate => {},
-            .register => {},
-            .variable => {},
+            .immediate => try movRegImm(lhs.register, rhs.immediate, buffer),
+            .register => try movRegReg(lhs.register, rhs.register, buffer),
+            .variable => try movRegVar(lhs.register, rhs.variable, buffer),
         }
     }
-
-    _ = buffer;
 }
 
-fn moveImmediate(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
+fn movRegImm(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
     // 0x40
     // B8 + rd io
     // Rex.W
@@ -69,7 +71,44 @@ fn moveImmediate(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
 
     var buf: [8]u8 = undefined;
     std.mem.writeInt(i64, &buf, imm64, .little);
+    try buffer.appendSlice(&buf);
+}
 
+fn movVarImm(offset: u32, imm64: i64, buffer: *std.ArrayList(u8)) !void {
+    try movRegImm(0, imm64, buffer);
+    try movVarReg(offset, 0, buffer);
+}
+
+fn movRegReg(lhs: u8, rhs: u8, buffer: *std.ArrayList(u8)) !void {
+    try buffer.append(0x48);
+    try buffer.append(0x89);
+
+    // MOD REG R/M
+    // 10  110 100
+    try buffer.append(0b11000000 | rhs << 3 | lhs);
+}
+
+fn movRegVar(lhs: u8, offset: u32, buffer: *std.ArrayList(u8)) !void {
+    try buffer.append(0x48);
+    try buffer.append(0x8B);
+
+    try buffer.append(0b10000100 | lhs << 3);
+    try buffer.append(0b10100100);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, offset, .little);
+    try buffer.appendSlice(&buf);
+}
+
+fn movVarReg(offset: u32, rhs: u8, buffer: *std.ArrayList(u8)) !void {
+    try buffer.append(0x48);
+    try buffer.append(0x89);
+
+    try buffer.append(0b10000100 | rhs << 3);
+    try buffer.append(0b10100100);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, offset, .little);
     try buffer.appendSlice(&buf);
 }
 
@@ -94,7 +133,7 @@ fn pop(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 fn push(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (lhs) {
         .immediate => {
-            try moveImmediate(0, lhs.immediate, buffer);
+            try movRegImm(0, lhs.immediate, buffer);
             try buffer.append(0x50);
         },
         .variable => try pushVariable(lhs.variable, buffer),
@@ -165,7 +204,7 @@ fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     _ = rhs;
     // TODO: implement mov for operand
 
-    // mov(lhs) ; try moveImmediate(2, imm64: i64, buffer: *std.ArrayList(u8)) !void {
+    // mov(lhs) ; try movRegImm(2, imm64: i64, buffer: *std.ArrayList(u8)) !void {
 
     // Rex.W
     // 01001000
@@ -174,4 +213,9 @@ fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     // ModR/M
     // MR => r/m | reg
     try buffer.append(0b11111000 + lhs.register);
+}
+
+fn syscall(buffer: *std.ArrayList(u8)) !void {
+    try buffer.append(0x0F);
+    try buffer.append(0x05);
 }

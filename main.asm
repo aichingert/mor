@@ -2,14 +2,9 @@ section .text
 
 global _start
 
-fn:
-    mov rax, 10
-    mov rdi, 20
-    add rdi, rax
-    ret
-
 _start:
-    call fn
+    push qword 1
+    mov rdi, [rsp + 8]
 
     mov rax, 60
     syscall

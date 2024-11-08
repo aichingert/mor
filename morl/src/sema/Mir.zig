@@ -279,7 +279,9 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
             }
 
             try self.instructions.append(instr);
-        } else if (std.mem.eql(u8, op, "syscall")) {} else {}
+        } else if (std.mem.eql(u8, op, "syscall")) {
+            try self.instructions.append(.{ .tag = .syscall });
+        } else {}
     }
 }
 
