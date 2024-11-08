@@ -109,11 +109,6 @@ pub fn genInstructions(self: *Self) !void {
 
     // TODO: support multiple top level statements (like other functions and imports)
     try self.genFromStatement(self.ast.stmts.items[0], &ctx);
-
-    var it = ctx.locals.valueIterator();
-    while (it.next()) |item| {
-        std.debug.print("{any}\n", .{item.*});
-    }
 }
 
 fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
@@ -178,7 +173,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 std.process.exit(1);
             }
 
-            try self.instructions.append(.{ .tag = .push, .lhs = .{ .variable = ctx.sp - (value.? - 8) } });
+            try self.instructions.append(.{ .tag = .push, .lhs = .{ .variable = ctx.sp - value.? } });
             ctx.sp += 8;
         },
         .binary_expr => {
@@ -259,7 +254,7 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
                     const value = ctx.locals.get(lhs[0 .. lhs.len - 1]);
                     if (value == null) @panic("ERROR: variable is not defined lhs");
 
-                    instr.lhs = .{ .variable = ctx.sp - (value.? - 8) };
+                    instr.lhs = .{ .variable = ctx.sp - value.? };
                 } else {
                     instr.lhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
                 }
@@ -272,7 +267,7 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
                     const value = ctx.locals.get(rhs);
                     if (value == null) @panic("ERROR: variable is not defined lhs");
 
-                    instr.rhs = .{ .variable = ctx.sp - (value.? - 8) };
+                    instr.rhs = .{ .variable = ctx.sp - value.? };
                 } else {
                     instr.rhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
                 }
