@@ -10,6 +10,7 @@ const Self = @This();
 nodes: NodeList.Slice,
 funcs: FuncList.Slice,
 calls: std.ArrayList(Call),
+conds: std.ArrayList(Cond),
 stmts: std.ArrayList(usize),
 
 source: []const u8,
@@ -31,9 +32,12 @@ pub const Node = struct {
 
     const Tag = enum {
         ident,
+
         num_expr,
         str_expr,
+        bol_expr,
 
+        if_expr,
         unary_expr,
         binary_expr,
         call_expr,
@@ -60,6 +64,11 @@ pub const Call = struct {
     args: std.ArrayList(usize),
 };
 
+pub const Cond = struct {
+    if_cond: usize,
+    if_body: std.ArrayList(usize),
+};
+
 pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!Self {
     var tokens = Self.TokenList{};
     defer tokens.deinit(gpa);
@@ -81,16 +90,19 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
         .tokens = tokens.toOwnedSlice(),
         .stmts = parser.stmts,
         .calls = parser.calls,
+        .conds = parser.conds,
         .nodes = parser.nodes.toOwnedSlice(),
         .funcs = parser.funcs.toOwnedSlice(),
     };
 }
 
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-    self.stmts.deinit();
-
     for (self.calls.items) |call| {
         call.args.deinit();
+    }
+
+    for (self.conds.items) |cond| {
+        cond.if_body.deinit();
     }
 
     for (self.funcs.items(.args), 0..) |_, i| {
@@ -99,6 +111,8 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     }
 
     self.calls.deinit();
+    self.conds.deinit();
+    self.stmts.deinit();
     self.nodes.deinit(gpa);
     self.funcs.deinit(gpa);
     self.tokens.deinit(gpa);

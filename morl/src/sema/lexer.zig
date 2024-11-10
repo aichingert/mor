@@ -60,8 +60,9 @@ pub const Token = struct {
 
         pub fn precedence(self: Tag) u8 {
             return switch (self) {
-                .minus, .plus => 10,
-                .slash, .asterisk => 20,
+                .less, .less_eq, .greater, .greater_eq => 30,
+                .minus, .plus => 40,
+                .slash, .asterisk => 60,
                 else => {
                     std.debug.print("{any}\n", .{self});
                     @panic("tag has no precedence");

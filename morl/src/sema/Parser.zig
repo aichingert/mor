@@ -14,6 +14,7 @@ source: []const u8,
 nodes: Ast.NodeList,
 funcs: Ast.FuncList,
 calls: std.ArrayList(Ast.Call),
+conds: std.ArrayList(Ast.Cond),
 stmts: std.ArrayList(usize),
 
 pub fn init(
@@ -28,6 +29,7 @@ pub fn init(
         .tok_tags = tok_tags,
         .tok_locs = tok_locs,
         .stmts = std.ArrayList(usize).init(gpa),
+        .conds = std.ArrayList(Ast.Cond).init(gpa),
         .calls = std.ArrayList(Ast.Call).init(gpa),
         .funcs = Ast.FuncList{},
         .nodes = Ast.NodeList{},
@@ -78,10 +80,14 @@ fn addCall(self: *Self, call: Ast.Call) std.mem.Allocator.Error!usize {
     return self.calls.items.len - 1;
 }
 
+fn addCond(self: *Self, cond: Ast.Cond) std.mem.Allocator.Error!usize {
+    try self.conds.append(cond);
+    return self.conds.items.len - 1;
+}
+
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
         try self.stmts.append(switch (self.peekTag()) {
-            .kw_if => try self.parseCondition(),
             .identifier => try self.parseDeclare(),
             else => {
                 std.debug.print("{any}\n", .{self.peekTag()});
@@ -92,19 +98,27 @@ pub fn parse(self: *Self) std.mem.Allocator.Error!void {
 }
 
 fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
-    self.expectNext(.kw_if);
+    const tok = self.nextToken();
 
-    _ = try self.parseExpr(0);
-
-    self.expectNext(.lbrace);
-
-    while (self.peekTag() != .rbrace) {
-        try self.parse();
+    if (self.tok_tags[tok] != .kw_if) {
+        @panic("Error: parse condition without if");
     }
 
-    self.expectNext(.rbrace);
+    const expr = try self.parseExpr(0);
+    self.expectNext(.lbrace);
+    const body = try self.parseFuncBody();
 
-    @panic("TODO");
+    return self.addNode(.{
+        .tag = .if_expr,
+        .main = tok,
+        .data = .{
+            .lhs = try self.addCond(.{
+                .if_cond = expr,
+                .if_body = body,
+            }),
+            .rhs = undefined,
+        },
+    });
 }
 
 fn parseCompMacroCall(self: *Self) std.mem.Allocator.Error!usize {
@@ -260,7 +274,7 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
 
     while (self.peekTag() != .rbrace) {
         switch (self.peekTag()) {
-            .kw_if => @panic("TODO"), // try self.parseCondition(),
+            .kw_if => try body.append(try self.parseCondition()),
             .kw_return => try body.append(try self.addNode(.{
                 .tag = .return_stmt,
                 .main = self.nextToken(),
