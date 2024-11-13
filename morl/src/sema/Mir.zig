@@ -66,6 +66,12 @@ pub const Instr = struct {
         mul,
 
         mov,
+        cmp,
+
+        je,
+        jl,
+        jle,
+
         pop,
         push,
 
@@ -126,6 +132,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             try ctx.locals.put(ident, ctx.sp);
         },
         .assign_stmt => {},
+        .if_expr => {},
         .macro_call_expr => {
             const man = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[man];

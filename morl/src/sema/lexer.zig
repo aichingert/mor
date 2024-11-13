@@ -24,6 +24,12 @@ pub const Token = struct {
         asterisk,
         dollar,
 
+        bit_or,
+        con_or,
+
+        bit_and,
+        con_and,
+
         lparen,
         rparen,
         lbrace,
@@ -60,6 +66,8 @@ pub const Token = struct {
 
         pub fn precedence(self: Tag) u8 {
             return switch (self) {
+                .con_or => 10,
+                .con_and => 20,
                 .less, .less_eq, .greater, .greater_eq => 30,
                 .minus, .plus => 40,
                 .slash, .asterisk => 60,
@@ -155,6 +163,8 @@ pub const Lexer = struct {
                 '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
                 '<' => self.genTokenIfNextIs('=', .less_eq, .less, result.loc.start),
                 '>' => self.genTokenIfNextIs('=', .greater_eq, .greater, result.loc.start),
+                '|' => self.genTokenIfNextIs('|', .con_or, .bit_or, result.loc.start),
+                '&' => self.genTokenIfNextIs('&', .con_and, .bit_and, result.loc.start),
                 '/' => self.genToken(.slash, result.loc.start),
                 '*' => self.genToken(.asterisk, result.loc.start),
                 ':' => self.genToken(.colon, result.loc.start),
