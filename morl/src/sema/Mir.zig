@@ -68,9 +68,10 @@ pub const Instr = struct {
         mov,
         cmp,
 
-        je,
-        jl,
-        jle,
+        lt,
+        le,
+        gt,
+        ge,
 
         pop,
         push,
@@ -85,13 +86,18 @@ pub const Instr = struct {
         }
 
         fn binaryFrom(token: lex.Token.Tag) Tag {
-            switch (token) {
-                .plus => return .add,
-                .minus => return .sub,
-                .slash => return .div,
-                .asterisk => return .mul,
+            return switch (token) {
+                .plus => .add,
+                .minus => .sub,
+                .slash => .div,
+                .asterisk => .mul,
+                .less => .lt,
+                .less_eq => .le,
+                .greater => .gt,
+                .greater_eq => .ge,
+
                 else => std.debug.panic("Unknown binary expr kind: {any}\n", .{token}),
-            }
+            };
         }
     };
 };
@@ -131,8 +137,35 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             try self.genFromExpression(data.rhs, ctx);
             try ctx.locals.put(ident, ctx.sp);
         },
-        .assign_stmt => {},
-        .if_expr => {},
+        .assign_stmt => {
+            const tok = self.ast.nodes.items(.main)[data.lhs];
+            const loc = self.ast.tokens.items(.loc)[tok];
+            const ident = self.ast.source[loc.start..loc.end];
+
+            const value = ctx.locals.get(ident);
+            if (value == null) {
+                std.debug.print("ERROR: reassign to unknown var\n", .{});
+                std.process.exit(1);
+            }
+
+            try self.genFromExpression(data.rhs, ctx);
+            try self.instructions.append(.{
+                .tag = .pop,
+                .lhs = .{ .register = 1 },
+            });
+            ctx.sp -= 8;
+
+            try self.instructions.append(.{
+                .tag = .mov,
+                .lhs = .{ .variable = ctx.sp - value.? },
+                .rhs = .{ .register = 1 },
+            });
+        },
+        .if_expr => {
+            const cond = self.ast.conds.items[data.lhs];
+
+            try self.genFromExpression(cond.if_cond, ctx);
+        },
         .macro_call_expr => {
             const man = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[man];

@@ -37,9 +37,10 @@ pub const Node = struct {
         str_expr,
         bol_expr,
 
-        if_expr,
         unary_expr,
         binary_expr,
+
+        if_expr,
         call_expr,
         macro_call_expr,
 
