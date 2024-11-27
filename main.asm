@@ -6,9 +6,12 @@ _start:
 
     push qword 1
 
-    cmp 10, 20
-    jne
+    mov rax, 0
+
+    cmp rax, 0
+    je  if_false
     push qword 2
+    jmp both
 if_false:
     push qword 3
 both:

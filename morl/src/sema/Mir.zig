@@ -68,6 +68,9 @@ pub const Instr = struct {
 
         mov,
 
+        cmp,
+        je,
+
         pop,
         push,
 
@@ -115,6 +118,8 @@ pub fn genInstructions(self: *Self) !void {
 }
 
 fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
+    std.debug.print("{d}: {d} {any}\n", .{ stmt, ctx.sp, self.ast.nodes.items(.tag)[stmt] });
+
     const data = self.ast.nodes.items(.data)[stmt];
 
     switch (self.ast.nodes.items(.tag)[stmt]) {
@@ -136,13 +141,14 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 std.debug.print("ERROR: reassign to unknown var\n", .{});
                 std.process.exit(1);
             }
-
             try self.genFromExpression(data.rhs, ctx);
             try self.instructions.append(.{
                 .tag = .pop,
                 .lhs = .{ .register = 1 },
             });
             ctx.sp -= 8;
+
+            std.debug.print("{any}\n", .{value});
 
             try self.instructions.append(.{
                 .tag = .mov,
@@ -154,6 +160,30 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             const cond = self.ast.conds.items[data.lhs];
 
             try self.genFromExpression(cond.if_cond, ctx);
+            try self.instructions.append(.{
+                .tag = .pop,
+                .lhs = .{ .register = 0 },
+            });
+            ctx.sp -= 8;
+
+            try self.instructions.append(.{
+                .tag = .cmp,
+                .lhs = .{ .register = 0 },
+                .rhs = .{ .immediate = 0 },
+            });
+            try self.instructions.append(.{
+                .tag = .je,
+                .lhs = .{ .immediate = 0 },
+            });
+
+            const ptr = self.instructions.items.len;
+            std.debug.print("PTR: {d}\n", .{ptr});
+
+            for (cond.if_body.items) |body_stmt| {
+                try self.genFromStatement(body_stmt, ctx);
+            }
+
+            // self.instructions.items[ptr..]
         },
         .macro_call_expr => {
             const man = self.ast.nodes.items(.main)[data.lhs];
@@ -166,8 +196,6 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 std.debug.print("{s}\n", .{lit});
                 @panic("Error: invalid compile macro");
             }
-
-            std.debug.print("CALL: {s}\n", .{lit});
         },
         .function_declare => {
             for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
@@ -206,8 +234,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             ctx.sp += 8;
         },
         .binary_expr => {
-            const tag = Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main]);
-
             try self.genFromExpression(data.lhs, ctx);
             try self.genFromExpression(data.rhs, ctx);
 
@@ -221,16 +247,21 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             });
             ctx.sp -= 16;
 
-            switch (tag) {
-                //.less, .less_eq, .greater, .greater_eq => {
-                //    std.debug.print("", .{});
-                //},
-                //.con_or, .con_and => {
-                //    std.debug.print("", .{});
-                //},
+            switch (self.ast.tokens.items(.tag)[main]) {
+                .less, .less_eq, .greater, .greater_eq => {
+                    try self.instructions.append(.{
+                        .tag = .push,
+                        .lhs = .{ .register = 1 },
+                    });
+                    ctx.sp += 8;
+                    std.debug.print("", .{});
+                },
+                .con_or, .con_and => {
+                    std.debug.print("", .{});
+                },
                 else => {
                     try self.instructions.append(.{
-                        .tag = tag,
+                        .tag = Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main]),
                         .lhs = .{ .register = 0 },
                         .rhs = .{ .register = 1 },
                     });
