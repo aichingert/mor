@@ -15,6 +15,7 @@ pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8
             .pop => try pop(item.lhs.?, &machine_code),
             .push => try push(item.lhs.?, &machine_code),
 
+            .xor => try xor(item.lhs.?, item.rhs.?, &machine_code),
             .add => try add(item.lhs.?, item.rhs.?, &machine_code),
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
             .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
@@ -165,10 +166,25 @@ fn pushVariable(offset: u32, buffer: *std.ArrayList(u8)) !void {
     try buffer.appendSlice(&buf);
 }
 
-fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    // NOTE: currently only implementing reg + reg since the intermediate representation is very simple and
+fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    // NOTE: currently only implementing reg ^ reg since
+    // the intermediate representation is very simple and
     // transforms everything in that form
 
+    // Instruction: REX.W + 33 /r
+
+    // REX.W
+    try buffer.append(0x48);
+    try buffer.append(0x33);
+
+    // ModR/M
+    // MR => r/m | reg
+
+    // 0b11xxxxxx => /r
+    try buffer.append(0b11000000 + (lhs.register << 3) + rhs.register);
+}
+
+fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     // Rex.W
     // 01001000
     try buffer.append(0x48);

@@ -60,18 +60,13 @@ pub const Instr = struct {
 
     pub const Tag = enum {
         neg,
+        xor,
         add,
         sub,
         div,
         mul,
 
         mov,
-        cmp,
-
-        lt,
-        le,
-        gt,
-        ge,
 
         pop,
         push,
@@ -87,15 +82,11 @@ pub const Instr = struct {
 
         fn binaryFrom(token: lex.Token.Tag) Tag {
             return switch (token) {
+                .xor => .xor,
                 .plus => .add,
                 .minus => .sub,
                 .slash => .div,
                 .asterisk => .mul,
-                .less => .lt,
-                .less_eq => .le,
-                .greater => .gt,
-                .greater_eq => .ge,
-
                 else => std.debug.panic("Unknown binary expr kind: {any}\n", .{token}),
             };
         }
@@ -128,8 +119,6 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
 
     switch (self.ast.nodes.items(.tag)[stmt]) {
         .mutable_declare, .constant_declare => {
-            // a := 10
-
             const tok = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[tok];
             const ident = self.ast.source[loc.start..loc.end];
@@ -232,16 +221,26 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             });
             ctx.sp -= 16;
 
-            try self.instructions.append(.{
-                .tag = tag,
-                .lhs = .{ .register = 0 },
-                .rhs = .{ .register = 1 },
-            });
-            try self.instructions.append(.{
-                .tag = .push,
-                .lhs = .{ .register = 0 },
-            });
-            ctx.sp += 8;
+            switch (tag) {
+                //.less, .less_eq, .greater, .greater_eq => {
+                //    std.debug.print("", .{});
+                //},
+                //.con_or, .con_and => {
+                //    std.debug.print("", .{});
+                //},
+                else => {
+                    try self.instructions.append(.{
+                        .tag = tag,
+                        .lhs = .{ .register = 0 },
+                        .rhs = .{ .register = 1 },
+                    });
+                    try self.instructions.append(.{
+                        .tag = .push,
+                        .lhs = .{ .register = 0 },
+                    });
+                    ctx.sp += 8;
+                },
+            }
         },
         .unary_expr => {
             const tag = Instr.Tag.unaryFrom(self.ast.tokens.items(.tag)[main]);

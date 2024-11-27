@@ -24,6 +24,7 @@ pub const Token = struct {
         asterisk,
         dollar,
 
+        xor,
         bit_or,
         con_or,
 
@@ -59,7 +60,7 @@ pub const Token = struct {
 
         pub fn isBinaryOp(self: Tag) bool {
             return switch (self) {
-                .plus, .minus, .slash, .asterisk, .less, .less_eq, .greater, .greater_eq => true,
+                .xor, .plus, .minus, .slash, .asterisk, .less, .less_eq, .greater, .greater_eq => true,
                 else => false,
             };
         }
@@ -69,6 +70,7 @@ pub const Token = struct {
                 .con_or => 10,
                 .con_and => 20,
                 .less, .less_eq, .greater, .greater_eq => 30,
+                .xor => 35,
                 .minus, .plus => 40,
                 .slash, .asterisk => 60,
                 else => {
@@ -159,6 +161,7 @@ pub const Lexer = struct {
 
         while (self.index < self.source.len) : (self.index += 1) {
             return switch (self.source[self.index]) {
+                '^' => self.genToken(.xor, result.loc.start),
                 '+' => self.genToken(.plus, result.loc.start),
                 '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
                 '<' => self.genTokenIfNextIs('=', .less_eq, .less, result.loc.start),
