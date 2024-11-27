@@ -5,12 +5,15 @@ const Mir = @import("../sema/Mir.zig");
 
 // /r reg and r/m are registers
 
-pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8) {
+pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr, start: usize) !std.ArrayList(u8) {
     _ = start;
     var machine_code = std.ArrayList(u8).init(gpa);
 
-    for (mir.instructions.items) |item| {
+    for (instr) |item| {
         switch (item.tag) {
+            .je => try je(item.lhs.?, &machine_code),
+
+            .cmp => try cmp(item.lhs.?, item.rhs.?, &machine_code),
             .mov => try mov(item.lhs.?, item.rhs.?, &machine_code),
             .pop => try pop(item.lhs.?, &machine_code),
             .push => try push(item.lhs.?, &machine_code),
@@ -31,6 +34,32 @@ pub fn genCode(gpa: std.mem.Allocator, mir: Mir, start: usize) !std.ArrayList(u8
     });
 
     return machine_code;
+}
+
+// FIXME: this causes a seg fault
+fn je(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .immediate) @panic("ERROR(compiler): only imm");
+
+    // 0F 84 cd
+    try buffer.append(0x0F);
+    try buffer.append(0x84);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, @intCast(lhs.immediate), .little);
+    try buffer.appendSlice(&buf);
+}
+
+fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .register or rhs != .immediate) @panic("ERROR(compiler): can only compare reg with imm");
+
+    // REX.W + 81 /7 id
+    try buffer.append(0x48);
+    try buffer.append(0x81);
+    try buffer.append(0b11000111 | lhs.register << 3);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, @intCast(rhs.immediate), .little);
+    try buffer.appendSlice(&buf);
 }
 
 fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {

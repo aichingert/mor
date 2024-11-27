@@ -3,6 +3,7 @@
 const std = @import("std");
 
 const Ast = @import("Ast.zig");
+const Asm = @import("../coge/linux_x86_64.zig");
 const lex = @import("lexer.zig");
 
 const Self = @This();
@@ -176,14 +177,20 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 .lhs = .{ .immediate = 0 },
             });
 
-            const ptr = self.instructions.items.len;
-            std.debug.print("PTR: {d}\n", .{ptr});
+            const ptr = self.instructions.items.len - 1;
 
             for (cond.if_body.items) |body_stmt| {
                 try self.genFromStatement(body_stmt, ctx);
             }
 
-            // self.instructions.items[ptr..]
+            // TODO: add jump to the end of both blocks
+            // .....
+
+            // NOTE: easiest and safest way to check the offset for the jmp since this will
+            // be in the actual exectuable, probably not the most efficient way of doing it
+            const bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..], 0);
+            self.instructions.items[ptr].lhs.?.immediate = @intCast(bytes.items.len);
+            bytes.deinit();
         },
         .macro_call_expr => {
             const man = self.ast.nodes.items(.main)[data.lhs];
