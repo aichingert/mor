@@ -119,8 +119,6 @@ pub fn genInstructions(self: *Self) !void {
 }
 
 fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
-    std.debug.print("{d}: {d} {any}\n", .{ stmt, ctx.sp, self.ast.nodes.items(.tag)[stmt] });
-
     const data = self.ast.nodes.items(.data)[stmt];
 
     switch (self.ast.nodes.items(.tag)[stmt]) {
@@ -177,7 +175,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 .lhs = .{ .immediate = 0 },
             });
 
-            const ptr = self.instructions.items.len - 1;
+            const ptr = self.instructions.items.len;
 
             for (cond.if_body.items) |body_stmt| {
                 try self.genFromStatement(body_stmt, ctx);
@@ -188,8 +186,11 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
 
             // NOTE: easiest and safest way to check the offset for the jmp since this will
             // be in the actual exectuable, probably not the most efficient way of doing it
+
+            std.debug.print("ITEMS: {d} \n", .{self.instructions.items[ptr..].len});
+
             const bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..], 0);
-            self.instructions.items[ptr].lhs.?.immediate = @intCast(bytes.items.len);
+            self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(bytes.items.len);
             bytes.deinit();
         },
         .macro_call_expr => {
@@ -214,7 +215,6 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
 }
 
 fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
-    std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)[expr]});
     const data = self.ast.nodes.items(.data)[expr];
     const main = self.ast.nodes.items(.main)[expr];
 

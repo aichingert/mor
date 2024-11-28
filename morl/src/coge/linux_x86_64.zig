@@ -6,8 +6,8 @@ const Mir = @import("../sema/Mir.zig");
 // /r reg and r/m are registers
 
 pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr, start: usize) !std.ArrayList(u8) {
-    _ = start;
     var machine_code = std.ArrayList(u8).init(gpa);
+    _ = start;
 
     for (instr) |item| {
         switch (item.tag) {
@@ -41,12 +41,21 @@ fn je(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .immediate) @panic("ERROR(compiler): only imm");
 
     // 0F 84 cd
-    try buffer.append(0x0F);
-    try buffer.append(0x84);
+    //try buffer.append(0x0F);
+    //try buffer.append(0x84);
 
-    var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, @intCast(lhs.immediate), .little);
-    try buffer.appendSlice(&buf);
+    try buffer.append(0x74);
+
+    std.debug.print("OFF: {d}\n", .{lhs.immediate});
+    try buffer.append(@intCast(lhs.immediate));
+
+    //OFF: 35
+    //OFF: 44
+    //OFF: 35
+
+    //var buf: [4]u8 = undefined;
+    //std.mem.writeInt(u32, &buf, 1, .little);
+    //try buffer.appendSlice(&buf);
 }
 
 fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
@@ -55,7 +64,7 @@ fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     // REX.W + 81 /7 id
     try buffer.append(0x48);
     try buffer.append(0x81);
-    try buffer.append(0b11000111 | lhs.register << 3);
+    try buffer.append(0b11111000 | lhs.register);
 
     var buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &buf, @intCast(rhs.immediate), .little);
