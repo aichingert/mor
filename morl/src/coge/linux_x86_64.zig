@@ -6,16 +6,17 @@ const Mir = @import("../sema/Mir.zig");
 pub const sys_exit = [_]u8{ 0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, 0x0f, 0x05 };
 
 // /r reg and r/m are registers
-pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr, start: usize) !std.ArrayList(u8) {
+pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
     var machine_code = std.ArrayList(u8).init(gpa);
-    _ = start;
 
     for (instr) |item| {
         switch (item.tag) {
             .je => try je(item.lhs.?, &machine_code),
-
             .cmp => try cmp(item.lhs.?, item.rhs.?, &machine_code),
+
             .mov => try mov(item.lhs.?, item.rhs.?, &machine_code),
+            .cmovg => try cmovg(item.lhs.?, item.rhs.?, &machine_code),
+
             .pop => try pop(item.lhs.?, &machine_code),
             .push => try push(item.lhs.?, &machine_code),
 
@@ -25,7 +26,10 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr, start: usize) !std.Ar
             .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
 
             .syscall => try syscall(&machine_code),
-            else => {},
+            else => {
+                std.debug.print("Tag: {any}\n", .{item.tag});
+                @panic("ERROR(coge/gen): failed invalid instruction");
+            },
         }
     }
 
@@ -45,10 +49,25 @@ fn je(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try buffer.appendSlice(&buf);
 }
 
-// cmp := REX.W + 81 /7 id
 fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    if (lhs != .register or rhs != .immediate) @panic("ERROR(compiler): can only compare reg with imm");
+    if (lhs == .register and rhs == .register) {
+        try cmpRegReg(lhs, rhs, buffer);
+    } else if (lhs == .register and rhs == .immediate) {
+        try cmpRegImm(lhs, rhs, buffer);
+    } else {
+        @panic("ERROR(coge/cmp): cannot compare rhs with lhs");
+    }
+}
 
+// cmp := REX.W + 3B /r
+fn cmpRegReg(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    try buffer.append(0x48);
+    try buffer.append(0x3B);
+    try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
+}
+
+// cmp := REX.W + 81 /7 id
+fn cmpRegImm(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try buffer.append(0x48);
     try buffer.append(0x81);
     try buffer.append(0b11111000 | lhs.register);
@@ -74,6 +93,15 @@ fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
             .variable => try movRegVar(lhs.register, rhs.variable, buffer),
         }
     }
+}
+
+// cmovg: REX.W + 0F 4F /r | (r64, r/m64)
+fn cmovg(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .register or rhs != .immediate) @panic("ERROR(coge/cmovg): invalid branchless reg/imm");
+
+    // NOTE: using register 5 here since 0, 1, ... could be used by the intermediate representation
+    try movRegImm(5, rhs.immediate, buffer);
+    try buffer.appendSlice(&[_]u8{ 0x48, 0x0F, 0x4F, 0b11000101 | (lhs.register << 3) });
 }
 
 fn movRegImm(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
@@ -209,36 +237,34 @@ fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try buffer.append(0b11000000 + (lhs.register << 3) + rhs.register);
 }
 
+// add := REX.W + 01 /r
 fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    // Rex.W
-    // 01001000
     try buffer.append(0x48);
     try buffer.append(0x01);
-    // ModR/M
-    // MR => r/m | reg
-    try buffer.append(0b11000000 + (rhs.register << 3) + lhs.register);
+    try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
 }
 
+// sub := REX.W + 2B /r
 fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    // Rex.W
-    // 01001000
     try buffer.append(0x48);
     try buffer.append(0x29);
-    // ModR/M
-    // MR => r/m | reg
-    try buffer.append(0b11000000 + (rhs.register << 3) + lhs.register);
+    try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
+
+    // TODO: figure out how to use only one instruction for sub
+    try movRegReg(lhs.register, rhs.register, buffer);
 }
 
+// TODO: currently not working
+// mul := REX.W + F7 /4
 fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    _ = rhs;
+    if (lhs != .register and lhs.register != 0) @panic("ERROR(coge/mul): lhs is not rax");
+    if (rhs != .register) @panic("ERROR(coge/mul): rhs is not a register");
 
-    // Rex.W
-    // 01001000
     try buffer.append(0x48);
     try buffer.append(0xF7);
-    // ModR/M
-    // MR => r/m | reg
-    try buffer.append(0b11100000 + lhs.register);
+    try buffer.append(0b11100000 | rhs.register);
+
+    try movRegReg(0, 7, buffer);
 }
 
 fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {

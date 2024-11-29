@@ -122,7 +122,7 @@ pub fn genExe(gpa: std.mem.Allocator, mir: Mir) !void {
     const header_off = @sizeOf(ElfHeader) + @sizeOf(ProgHeader);
     const entry_off = base_point + header_off;
 
-    var machine_code = try Asm.genCode(gpa, mir.instructions.items[0..], entry_off);
+    var machine_code = try Asm.genCode(gpa, mir.instructions.items[0..]);
     defer machine_code.deinit();
 
     const file_size = header_off + machine_code.items.len;

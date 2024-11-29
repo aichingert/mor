@@ -68,6 +68,11 @@ pub const Instr = struct {
         mul,
 
         mov,
+        cmove,
+        cmovg,
+        cmovge,
+        cmovl,
+        cmovle,
 
         cmp,
         je,
@@ -91,6 +96,12 @@ pub const Instr = struct {
                 .minus => .sub,
                 .slash => .div,
                 .asterisk => .mul,
+
+                .eq => .cmove,
+                .less => .cmovl,
+                .less_eq => .cmovle,
+                .greater => .cmovg,
+                .greater_eq => .cmovge,
                 else => std.debug.panic("Unknown binary expr kind: {any}\n", .{token}),
             };
         }
@@ -184,10 +195,10 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
 
             // NOTE: easiest and safest way to check the offset for the jmp since this will
             // be in the actual exectuable, probably not the most efficient way of doing it
-            const bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..], 0);
-            const len = bytes.items.len - Asm.sys_exit.len;
+            const bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
+            const jump = bytes.items.len - Asm.sys_exit.len;
 
-            self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(len);
+            self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(jump);
             bytes.deinit();
         },
         .macro_call_expr => {
@@ -251,14 +262,33 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             });
             ctx.sp -= 16;
 
+            std.debug.print("MUTTER: {any}\n", .{self.ast.tokens.items(.tag)[main]});
             switch (self.ast.tokens.items(.tag)[main]) {
                 .less, .less_eq, .greater, .greater_eq => {
                     try self.instructions.append(.{
+                        .tag = .mov,
+                        .lhs = .{ .register = 2 },
+                        .rhs = .{ .immediate = 0 },
+                    });
+                    try self.instructions.append(.{
+                        .tag = .cmp,
+                        .lhs = .{ .register = 0 },
+                        .rhs = .{ .register = 1 },
+                    });
+
+                    std.debug.print("F: {any}\n", .{Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main])});
+
+                    try self.instructions.append(.{
+                        .tag = Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main]),
+                        .lhs = .{ .register = 2 },
+                        .rhs = .{ .immediate = 1 },
+                    });
+
+                    try self.instructions.append(.{
                         .tag = .push,
-                        .lhs = .{ .register = 1 },
+                        .lhs = .{ .register = 2 },
                     });
                     ctx.sp += 8;
-                    std.debug.print("", .{});
                 },
                 .con_or, .con_and => {
                     std.debug.print("", .{});
