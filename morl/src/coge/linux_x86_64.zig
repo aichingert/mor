@@ -13,6 +13,7 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
         switch (item.tag) {
             .je => try je(item.lhs.?, &machine_code),
             .cmp => try cmp(item.lhs.?, item.rhs.?, &machine_code),
+            .jmp => try jmp(item.lhs.?, &machine_code),
 
             .mov => try mov(item.lhs.?, item.rhs.?, &machine_code),
             .cmove => try cmov(item.lhs.?, item.rhs.?, 0x44, &machine_code),
@@ -65,6 +66,17 @@ fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     } else {
         @panic("ERROR(coge/cmp): cannot compare rhs with lhs");
     }
+}
+
+// jmp := E9 cd
+fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .immediate) @panic("ERROR(coge/jmp): only imm");
+
+    try buffer.append(0xE9);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, @intCast(lhs.immediate), .little);
+    try buffer.appendSlice(&buf);
 }
 
 // cmp := REX.W + 3B /r

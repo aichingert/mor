@@ -2,14 +2,22 @@ main :: () {
     a : str : 3
     b : i8 = 5
     c : i8 = 10
-
-    if a >= c || 0 || 1 && 0 {
-        c = 20 - b - a
-    }
     
-    if b - c ^ 5 == a || b + 3 {
-        c = 2
+    if 0 {
+        a = 1
+        b = 1
+    } elif 0 { 
+        a = 2
+        b = 2
+    } elif 0 {
+        a = 3
+        b = 3
+    } else {
+        a = 5
+        b = 5
     }
+
+    c = a + b
 
     $asm(
         "mov rax, 60",

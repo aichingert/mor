@@ -98,23 +98,45 @@ pub fn parse(self: *Self) std.mem.Allocator.Error!void {
 }
 
 fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
-    const tok = self.nextToken();
-
-    if (self.tok_tags[tok] != .kw_if) {
-        @panic("Error: parse condition without if");
-    }
+    self.expectNext(.kw_if);
 
     const expr = try self.parseExpr(0);
     self.expectNext(.lbrace);
     const body = try self.parseFuncBody();
+    var elif_ex = std.ArrayList(usize).init(self.gpa);
+    var el_body = std.ArrayList(usize).init(self.gpa);
+
+    while (self.peekTag() == .kw_elif) {
+        self.expectNext(.kw_elif);
+        const elif_expr = try self.parseExpr(0);
+        self.expectNext(.lbrace);
+        const elif_body = try self.parseFuncBody();
+
+        try elif_ex.append(try self.addCond(.{
+            .if_cond = elif_expr,
+            .if_body = elif_body,
+            .elif_ex = undefined,
+            .el_body = undefined,
+        }));
+    }
+
+    if (self.peekTag() == .kw_else) {
+        self.expectNext(.kw_else);
+        self.expectNext(.lbrace);
+
+        el_body.deinit();
+        el_body = try self.parseFuncBody();
+    }
 
     return self.addNode(.{
         .tag = .if_expr,
-        .main = tok,
+        .main = undefined,
         .data = .{
             .lhs = try self.addCond(.{
                 .if_cond = expr,
                 .if_body = body,
+                .elif_ex = elif_ex,
+                .el_body = el_body,
             }),
             .rhs = undefined,
         },

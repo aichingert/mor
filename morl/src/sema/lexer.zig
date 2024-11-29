@@ -49,8 +49,12 @@ pub const Token = struct {
         semicolon,
 
         kw_if,
+        kw_elif,
         kw_else,
+        kw_while,
         kw_return,
+
+        // 19 - 15
 
         invalid,
         eof,
@@ -221,6 +225,8 @@ pub const Lexer = struct {
                         token.tag = .kw_if;
                     } else if (eql(u8, self.source[token.loc.start..token.loc.end], "else")) {
                         token.tag = .kw_else;
+                    } else if (eql(u8, self.source[token.loc.start..token.loc.end], "elif")) {
+                        token.tag = .kw_elif;
                     } else if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
                         token.tag = .kw_return;
                     }

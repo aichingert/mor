@@ -68,6 +68,14 @@ pub const Call = struct {
 pub const Cond = struct {
     if_cond: usize,
     if_body: std.ArrayList(usize),
+    elif_ex: std.ArrayList(usize),
+    el_body: std.ArrayList(usize),
+
+    fn deinit(self: *const Cond) void {
+        self.if_body.deinit();
+        self.elif_ex.deinit();
+        self.el_body.deinit();
+    }
 };
 
 pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!Self {
@@ -103,7 +111,7 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     }
 
     for (self.conds.items) |cond| {
-        cond.if_body.deinit();
+        cond.deinit();
     }
 
     for (self.funcs.items(.args), 0..) |_, i| {

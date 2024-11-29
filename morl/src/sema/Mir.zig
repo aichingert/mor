@@ -79,6 +79,7 @@ pub const Instr = struct {
         cmovle,
 
         cmp,
+        jmp,
         je,
 
         pop,
@@ -192,22 +193,87 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 .lhs = .{ .immediate = 0 },
             });
 
-            const ptr = self.instructions.items.len;
+            // cmp cond-1
+            // je .blk -1
+            //    ...
+            //    jmp .end
+            // cmp cond-2
+            // je .blk -2
+            //    ...
+            //    jmp .end
+            // .else
+            //    ...
+            // .end
+
+            var ptr = self.instructions.items.len;
+            var jps = std.ArrayList(usize).init(self.gpa);
 
             for (cond.if_body.items) |body_stmt| {
                 try self.genFromStatement(body_stmt, ctx);
             }
 
-            // TODO: add jump to the end of both blocks
-            // .....
+            try self.instructions.append(.{
+                .tag = .jmp,
+                .lhs = .{ .immediate = 0 },
+            });
+            try jps.append(self.instructions.items.len);
 
             // NOTE: easiest and safest way to check the offset for the jmp since this will
             // be in the actual exectuable, probably not the most efficient way of doing it
-            const bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
-            const jump = bytes.items.len - Asm.sys_exit.len;
-
+            var bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
+            var jump = bytes.items.len - Asm.sys_exit.len;
             self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(jump);
             bytes.deinit();
+
+            for (cond.elif_ex.items) |idx| {
+                const elif = self.ast.conds.items[idx];
+
+                try self.genFromExpression(elif.if_cond, ctx);
+                try self.instructions.append(.{
+                    .tag = .pop,
+                    .lhs = .{ .register = 0 },
+                });
+                ctx.sp -= 8;
+
+                try self.instructions.append(.{
+                    .tag = .cmp,
+                    .lhs = .{ .register = 0 },
+                    .rhs = .{ .immediate = 0 },
+                });
+                try self.instructions.append(.{
+                    .tag = .je,
+                    .lhs = .{ .immediate = 0 },
+                });
+                ptr = self.instructions.items.len;
+
+                for (elif.if_body.items) |body_stmt| {
+                    try self.genFromStatement(body_stmt, ctx);
+                }
+
+                try self.instructions.append(.{
+                    .tag = .jmp,
+                    .lhs = .{ .immediate = 0 },
+                });
+                try jps.append(self.instructions.items.len);
+
+                bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
+                jump = bytes.items.len - Asm.sys_exit.len;
+                self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(jump);
+                bytes.deinit();
+            }
+
+            for (cond.el_body.items) |body_stmt| {
+                try self.genFromStatement(body_stmt, ctx);
+            }
+
+            for (jps.items) |jmp| {
+                bytes = try Asm.genCode(self.gpa, self.instructions.items[jmp..]);
+                jump = bytes.items.len - Asm.sys_exit.len;
+                self.instructions.items[jmp - 1].lhs.?.immediate = @intCast(jump);
+                bytes.deinit();
+            }
+
+            jps.deinit();
         },
         .macro_call_expr => {
             const man = self.ast.nodes.items(.main)[data.lhs];
