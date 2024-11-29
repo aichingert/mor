@@ -147,8 +147,6 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             });
             ctx.sp -= 8;
 
-            std.debug.print("{any}\n", .{value});
-
             try self.instructions.append(.{
                 .tag = .mov,
                 .lhs = .{ .variable = ctx.sp - value.? },
@@ -186,11 +184,10 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
 
             // NOTE: easiest and safest way to check the offset for the jmp since this will
             // be in the actual exectuable, probably not the most efficient way of doing it
-
-            std.debug.print("ITEMS: {d} \n", .{self.instructions.items[ptr..].len});
-
             const bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..], 0);
-            self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(bytes.items.len);
+            const len = bytes.items.len - Asm.sys_exit.len;
+
+            self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(len);
             bytes.deinit();
         },
         .macro_call_expr => {
