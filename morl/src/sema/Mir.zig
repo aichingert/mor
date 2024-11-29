@@ -67,8 +67,12 @@ pub const Instr = struct {
         div,
         mul,
 
+        bit_or,
+        bit_and,
+
         mov,
         cmove,
+        cmovne,
         cmovg,
         cmovge,
         cmovl,
@@ -98,10 +102,14 @@ pub const Instr = struct {
                 .asterisk => .mul,
 
                 .eq => .cmove,
+                .not_eq => .cmovne,
                 .less => .cmovl,
                 .less_eq => .cmovle,
                 .greater => .cmovg,
                 .greater_eq => .cmovge,
+
+                .con_or => .bit_or,
+                .con_and => .bit_and,
                 else => std.debug.panic("Unknown binary expr kind: {any}\n", .{token}),
             };
         }
@@ -262,9 +270,8 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             });
             ctx.sp -= 16;
 
-            std.debug.print("MUTTER: {any}\n", .{self.ast.tokens.items(.tag)[main]});
             switch (self.ast.tokens.items(.tag)[main]) {
-                .less, .less_eq, .greater, .greater_eq => {
+                .eq, .not_eq, .less, .less_eq, .greater, .greater_eq => {
                     try self.instructions.append(.{
                         .tag = .mov,
                         .lhs = .{ .register = 2 },
@@ -275,8 +282,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                         .lhs = .{ .register = 0 },
                         .rhs = .{ .register = 1 },
                     });
-
-                    std.debug.print("F: {any}\n", .{Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main])});
 
                     try self.instructions.append(.{
                         .tag = Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main]),
@@ -291,7 +296,33 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                     ctx.sp += 8;
                 },
                 .con_or, .con_and => {
-                    std.debug.print("", .{});
+                    try self.instructions.append(.{
+                        .tag = .mov,
+                        .lhs = .{ .register = 2 },
+                        .rhs = .{ .immediate = 0 },
+                    });
+                    try self.instructions.append(.{
+                        .tag = Instr.Tag.binaryFrom(self.ast.tokens.items(.tag)[main]),
+                        .lhs = .{ .register = 0 },
+                        .rhs = .{ .register = 1 },
+                    });
+                    try self.instructions.append(.{
+                        .tag = .cmp,
+                        .lhs = .{ .register = 0 },
+                        .rhs = .{ .immediate = 0 },
+                    });
+
+                    try self.instructions.append(.{
+                        .tag = .cmovne,
+                        .lhs = .{ .register = 2 },
+                        .rhs = .{ .immediate = 1 },
+                    });
+
+                    try self.instructions.append(.{
+                        .tag = .push,
+                        .lhs = .{ .register = 2 },
+                    });
+                    ctx.sp += 8;
                 },
                 else => {
                     try self.instructions.append(.{

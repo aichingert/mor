@@ -18,6 +18,7 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .cmove => try cmov(item.lhs.?, item.rhs.?, 0x44, &machine_code),
             .cmovg => try cmov(item.lhs.?, item.rhs.?, 0x4F, &machine_code),
             .cmovl => try cmov(item.lhs.?, item.rhs.?, 0x4C, &machine_code),
+            .cmovne => try cmov(item.lhs.?, item.rhs.?, 0x45, &machine_code),
             .cmovge => try cmov(item.lhs.?, item.rhs.?, 0x4D, &machine_code),
             .cmovle => try cmov(item.lhs.?, item.rhs.?, 0x4E, &machine_code),
 
@@ -25,6 +26,9 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .push => try push(item.lhs.?, &machine_code),
 
             .xor => try xor(item.lhs.?, item.rhs.?, &machine_code),
+            .bit_or => try bit_or(item.lhs.?, item.rhs.?, &machine_code),
+            .bit_and => try bit_and(item.lhs.?, item.rhs.?, &machine_code),
+
             .add => try add(item.lhs.?, item.rhs.?, &machine_code),
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
             .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
@@ -227,6 +231,7 @@ fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     // NOTE: currently only implementing reg ^ reg since
     // the intermediate representation is very simple and
     // transforms everything in that form
+    if (lhs != .register or rhs != .register) @panic("ERROR(coge/xor): only support reg/reg");
 
     // Instruction: REX.W + 33 /r
 
@@ -239,6 +244,20 @@ fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
     // 0b11xxxxxx => /r
     try buffer.append(0b11000000 + (lhs.register << 3) + rhs.register);
+}
+
+// or := REX.W + 0B /r
+fn bit_or(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .register or rhs != .register) @panic("ERROR(coge/bit_or): only support reg/reg");
+
+    try buffer.appendSlice(&[_]u8{ 0x48, 0x0B, 0b11000000 | (lhs.register << 3) | rhs.register });
+}
+
+// or := REX.W + 23 /r
+fn bit_and(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .register or rhs != .register) @panic("ERROR(coge/bit_and): only support reg/reg");
+
+    try buffer.appendSlice(&[_]u8{ 0x48, 0x23, 0b11000000 | (lhs.register << 3) | rhs.register });
 }
 
 // add := REX.W + 01 /r

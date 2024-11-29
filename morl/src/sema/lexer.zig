@@ -15,11 +15,13 @@ pub const Token = struct {
         string_lit,
 
         eq,
+        not_eq,
         less,
         less_eq,
         greater,
         greater_eq,
 
+        not,
         plus,
         minus,
         slash,
@@ -62,7 +64,21 @@ pub const Token = struct {
 
         pub fn isBinaryOp(self: Tag) bool {
             return switch (self) {
-                .xor, .plus, .minus, .slash, .asterisk, .less, .less_eq, .greater, .greater_eq => true,
+                .xor,
+                .not,
+                .plus,
+                .minus,
+                .slash,
+                .asterisk,
+                .con_or,
+                .con_and,
+                .eq,
+                .not_eq,
+                .less,
+                .less_eq,
+                .greater,
+                .greater_eq,
+                => true,
                 else => false,
             };
         }
@@ -71,8 +87,8 @@ pub const Token = struct {
             return switch (self) {
                 .con_or => 10,
                 .con_and => 20,
-                .eq, .less, .less_eq, .greater, .greater_eq => 30,
-                .xor => 35,
+                .eq, .not_eq, .less, .less_eq, .greater, .greater_eq => 30,
+                .not, .xor => 35,
                 .minus, .plus => 40,
                 .slash, .asterisk => 60,
                 else => {
@@ -166,6 +182,7 @@ pub const Lexer = struct {
                 '^' => self.genToken(.xor, result.loc.start),
                 '+' => self.genToken(.plus, result.loc.start),
                 '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
+                '!' => self.genTokenIfNextIs('=', .not_eq, .not, result.loc.start),
                 '<' => self.genTokenIfNextIs('=', .less_eq, .less, result.loc.start),
                 '>' => self.genTokenIfNextIs('=', .greater_eq, .greater, result.loc.start),
                 '|' => self.genTokenIfNextIs('|', .con_or, .bit_or, result.loc.start),
