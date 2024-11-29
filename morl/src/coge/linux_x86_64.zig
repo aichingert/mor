@@ -15,7 +15,11 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .cmp => try cmp(item.lhs.?, item.rhs.?, &machine_code),
 
             .mov => try mov(item.lhs.?, item.rhs.?, &machine_code),
-            .cmovg => try cmovg(item.lhs.?, item.rhs.?, &machine_code),
+            .cmove => try cmov(item.lhs.?, item.rhs.?, 0x44, &machine_code),
+            .cmovg => try cmov(item.lhs.?, item.rhs.?, 0x4F, &machine_code),
+            .cmovl => try cmov(item.lhs.?, item.rhs.?, 0x4C, &machine_code),
+            .cmovge => try cmov(item.lhs.?, item.rhs.?, 0x4D, &machine_code),
+            .cmovle => try cmov(item.lhs.?, item.rhs.?, 0x4E, &machine_code),
 
             .pop => try pop(item.lhs.?, &machine_code),
             .push => try push(item.lhs.?, &machine_code),
@@ -95,13 +99,13 @@ fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     }
 }
 
-// cmovg: REX.W + 0F 4F /r | (r64, r/m64)
-fn cmovg(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    if (lhs != .register or rhs != .immediate) @panic("ERROR(coge/cmovg): invalid branchless reg/imm");
+// cmov: REX.W + 0F __ /r | (r64, r/m64)
+fn cmov(lhs: Mir.Operand, rhs: Mir.Operand, op: u8, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .register or rhs != .immediate) @panic("ERROR(coge/cmove): invalid branchless reg/imm");
 
     // NOTE: using register 5 here since 0, 1, ... could be used by the intermediate representation
     try movRegImm(5, rhs.immediate, buffer);
-    try buffer.appendSlice(&[_]u8{ 0x48, 0x0F, 0x4F, 0b11000101 | (lhs.register << 3) });
+    try buffer.appendSlice(&[_]u8{ 0x48, 0x0F, op, 0b11000101 | (lhs.register << 3) });
 }
 
 fn movRegImm(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
