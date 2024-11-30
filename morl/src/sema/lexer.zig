@@ -54,8 +54,6 @@ pub const Token = struct {
         kw_while,
         kw_return,
 
-        // 19 - 15
-
         invalid,
         eof,
 
@@ -227,6 +225,8 @@ pub const Lexer = struct {
                         token.tag = .kw_else;
                     } else if (eql(u8, self.source[token.loc.start..token.loc.end], "elif")) {
                         token.tag = .kw_elif;
+                    } else if (eql(u8, self.source[token.loc.start..token.loc.end], "while")) {
+                        token.tag = .kw_while;
                     } else if (eql(u8, self.source[token.loc.start..token.loc.end], "return")) {
                         token.tag = .kw_return;
                     }

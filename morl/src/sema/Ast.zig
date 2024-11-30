@@ -11,6 +11,7 @@ nodes: NodeList.Slice,
 funcs: FuncList.Slice,
 calls: std.ArrayList(Call),
 conds: std.ArrayList(Cond),
+loops: std.ArrayList(Loop),
 stmts: std.ArrayList(usize),
 
 source: []const u8,
@@ -41,6 +42,7 @@ pub const Node = struct {
         binary_expr,
 
         if_expr,
+        while_expr,
         call_expr,
         macro_call_expr,
 
@@ -63,6 +65,15 @@ pub const Func = struct {
 
 pub const Call = struct {
     args: std.ArrayList(usize),
+};
+
+pub const Loop = struct {
+    cond: usize,
+    body: std.ArrayList(usize),
+
+    fn deinit(self: *const Loop) void {
+        self.body.deinit();
+    }
 };
 
 pub const Cond = struct {
@@ -100,6 +111,7 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
         .stmts = parser.stmts,
         .calls = parser.calls,
         .conds = parser.conds,
+        .loops = parser.loops,
         .nodes = parser.nodes.toOwnedSlice(),
         .funcs = parser.funcs.toOwnedSlice(),
     };
@@ -114,6 +126,10 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
         cond.deinit();
     }
 
+    for (self.loops.items) |loop| {
+        loop.deinit();
+    }
+
     for (self.funcs.items(.args), 0..) |_, i| {
         self.funcs.items(.args)[i].deinit();
         self.funcs.items(.body)[i].deinit();
@@ -121,6 +137,7 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
 
     self.calls.deinit();
     self.conds.deinit();
+    self.loops.deinit();
     self.stmts.deinit();
     self.nodes.deinit(gpa);
     self.funcs.deinit(gpa);

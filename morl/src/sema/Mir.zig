@@ -1,5 +1,9 @@
 // Mir.zig: Mor intermediate representation
 
+// FIXME: this is all a wip and should be refactored
+// but I am not doing it since I want to write the
+// next self hosted version soon
+
 const std = @import("std");
 
 const Ast = @import("Ast.zig");
@@ -174,6 +178,18 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             });
         },
         .if_expr => {
+            // cmp cond-1
+            // je .blk -1
+            //    ...
+            //    jmp .end
+            // cmp cond-2
+            // je .blk -2
+            //    ...
+            //    jmp .end
+            // .else
+            //    ...
+            // .end
+
             const cond = self.ast.conds.items[data.lhs];
 
             try self.genFromExpression(cond.if_cond, ctx);
@@ -192,18 +208,6 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 .tag = .je,
                 .lhs = .{ .immediate = 0 },
             });
-
-            // cmp cond-1
-            // je .blk -1
-            //    ...
-            //    jmp .end
-            // cmp cond-2
-            // je .blk -2
-            //    ...
-            //    jmp .end
-            // .else
-            //    ...
-            // .end
 
             var ptr = self.instructions.items.len;
             var jps = std.ArrayList(usize).init(self.gpa);
@@ -274,6 +278,60 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             }
 
             jps.deinit();
+        },
+        .while_expr => {
+            // cmp cond
+            // je 0
+            //    ...
+            // jmp start
+
+            const loop = self.ast.loops.items[data.lhs];
+            const size = self.instructions.items.len;
+
+            try self.genFromExpression(loop.cond, ctx);
+            try self.instructions.append(.{
+                .tag = .pop,
+                .lhs = .{ .register = 0 },
+            });
+            ctx.sp -= 8;
+
+            try self.instructions.append(.{
+                .tag = .cmp,
+                .lhs = .{ .register = 0 },
+                .rhs = .{ .immediate = 0 },
+            });
+            try self.instructions.append(.{
+                .tag = .je,
+                .lhs = .{ .immediate = 0 },
+            });
+            const ptr = self.instructions.items.len;
+
+            for (loop.body.items) |loop_stmt| {
+                try self.genFromStatement(loop_stmt, ctx);
+            }
+
+            try self.instructions.append(.{
+                .tag = .jmp,
+                .lhs = .{ .immediate = 0 },
+            });
+
+            std.debug.print("{d} {d} -> \n", .{ size, ptr });
+            for (self.instructions.items[size..ptr]) |it| {
+                std.debug.print("{any}\n", .{it});
+            }
+
+            const len = self.instructions.items.len;
+            const eval = try Asm.genCode(self.gpa, self.instructions.items[size..ptr]);
+            const eval_size = eval.items.len - Asm.sys_exit.len;
+
+            const body = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
+            const body_size = body.items.len - Asm.sys_exit.len;
+
+            self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(body_size);
+            self.instructions.items[len - 1].lhs.?.immediate = -@as(i64, @intCast(eval_size + body_size));
+
+            eval.deinit();
+            body.deinit();
         },
         .macro_call_expr => {
             const man = self.ast.nodes.items(.main)[data.lhs];

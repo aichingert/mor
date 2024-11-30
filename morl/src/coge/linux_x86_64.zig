@@ -75,7 +75,7 @@ fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try buffer.append(0xE9);
 
     var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, @intCast(lhs.immediate), .little);
+    std.mem.writeInt(i32, &buf, @intCast(lhs.immediate), .little);
     try buffer.appendSlice(&buf);
 }
 

@@ -15,6 +15,7 @@ nodes: Ast.NodeList,
 funcs: Ast.FuncList,
 calls: std.ArrayList(Ast.Call),
 conds: std.ArrayList(Ast.Cond),
+loops: std.ArrayList(Ast.Loop),
 stmts: std.ArrayList(usize),
 
 pub fn init(
@@ -30,6 +31,7 @@ pub fn init(
         .tok_locs = tok_locs,
         .stmts = std.ArrayList(usize).init(gpa),
         .conds = std.ArrayList(Ast.Cond).init(gpa),
+        .loops = std.ArrayList(Ast.Loop).init(gpa),
         .calls = std.ArrayList(Ast.Call).init(gpa),
         .funcs = Ast.FuncList{},
         .nodes = Ast.NodeList{},
@@ -85,6 +87,11 @@ fn addCond(self: *Self, cond: Ast.Cond) std.mem.Allocator.Error!usize {
     return self.conds.items.len - 1;
 }
 
+fn addLoop(self: *Self, loop: Ast.Loop) std.mem.Allocator.Error!usize {
+    try self.loops.append(loop);
+    return self.loops.items.len - 1;
+}
+
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
         try self.stmts.append(switch (self.peekTag()) {
@@ -137,6 +144,27 @@ fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
                 .if_body = body,
                 .elif_ex = elif_ex,
                 .el_body = el_body,
+            }),
+            .rhs = undefined,
+        },
+    });
+}
+
+fn parseWhile(self: *Self) std.mem.Allocator.Error!usize {
+    self.expectNext(.kw_while);
+
+    const cond = try self.parseExpr(0);
+
+    self.expectNext(.lbrace);
+    const body = try self.parseFuncBody();
+
+    return self.addNode(.{
+        .tag = .while_expr,
+        .main = undefined,
+        .data = .{
+            .lhs = try self.addLoop(.{
+                .cond = cond,
+                .body = body,
             }),
             .rhs = undefined,
         },
@@ -295,21 +323,22 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
     var body = std.ArrayList(usize).init(self.gpa);
 
     while (self.peekTag() != .rbrace) {
-        switch (self.peekTag()) {
-            .kw_if => try body.append(try self.parseCondition()),
-            .kw_return => try body.append(try self.addNode(.{
+        try body.append(switch (self.peekTag()) {
+            .kw_if => try self.parseCondition(),
+            .kw_while => try self.parseWhile(),
+            .kw_return => try self.addNode(.{
                 .tag = .return_stmt,
                 .main = self.nextToken(),
                 .data = .{ .lhs = try self.parseExpr(0), .rhs = undefined },
-            })),
-            .dollar => try body.append(try self.parseCompMacroCall()),
-            .identifier => try body.append(try self.parseDeclare()),
+            }),
+            .dollar => try self.parseCompMacroCall(),
+            .identifier => try self.parseDeclare(),
             else => {
                 std.debug.print("{d}\n", .{self.tok_i});
                 std.debug.print("{any}\n", .{self.peekTag()});
                 @panic("expected string literal but got ^");
             },
-        }
+        });
     }
 
     self.expectNext(.rbrace);
