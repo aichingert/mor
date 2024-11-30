@@ -183,13 +183,6 @@ pub const Lexer = struct {
             return switch (self.source[self.index]) {
                 '^' => self.genToken(.xor, result.loc.start),
                 '+' => self.genToken(.plus, result.loc.start),
-                '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
-                '!' => self.genTokenIfNextIs('=', .not_eq, .not, result.loc.start),
-                '<' => self.genTokenIfNextIs('=', .less_eq, .less, result.loc.start),
-                '>' => self.genTokenIfNextIs('=', .greater_eq, .greater, result.loc.start),
-                '|' => self.genTokenIfNextIs('|', .con_or, .bit_or, result.loc.start),
-                '&' => self.genTokenIfNextIs('&', .con_and, .bit_and, result.loc.start),
-                '=' => self.genTokenIfNextIs('=', .eq, .equal, result.loc.start),
                 '/' => self.genToken(.slash, result.loc.start),
                 '*' => self.genToken(.asterisk, result.loc.start),
                 ':' => self.genToken(.colon, result.loc.start),
@@ -200,6 +193,13 @@ pub const Lexer = struct {
                 '{' => self.genToken(.lbrace, result.loc.start),
                 '}' => self.genToken(.rbrace, result.loc.start),
                 '$' => self.genToken(.dollar, result.loc.start),
+                '-' => self.genTokenIfNextIs('>', .arrow, .minus, result.loc.start),
+                '!' => self.genTokenIfNextIs('=', .not_eq, .not, result.loc.start),
+                '<' => self.genTokenIfNextIs('=', .less_eq, .less, result.loc.start),
+                '>' => self.genTokenIfNextIs('=', .greater_eq, .greater, result.loc.start),
+                '|' => self.genTokenIfNextIs('|', .con_or, .bit_or, result.loc.start),
+                '&' => self.genTokenIfNextIs('&', .con_and, .bit_and, result.loc.start),
+                '=' => self.genTokenIfNextIs('=', .eq, .equal, result.loc.start),
                 '0'...'9' => {
                     while (self.isNumber()) : (self.index += 1) {}
                     return self.genToken(.number_lit, result.loc.start);

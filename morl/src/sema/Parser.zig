@@ -7,6 +7,7 @@ const Self = @This();
 gpa: std.mem.Allocator,
 
 tok_i: usize,
+entry: usize,
 tok_tags: []const Token.Tag,
 tok_locs: []const Token.Loc,
 
@@ -26,6 +27,7 @@ pub fn init(
 ) Self {
     return .{
         .gpa = gpa,
+        .entry = std.math.maxInt(usize),
         .tok_i = 0,
         .tok_tags = tok_tags,
         .tok_locs = tok_locs,
@@ -227,6 +229,18 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
 
             if (self.nodes.items(.tag)[expr] == .function_declare) {
                 self.nodes.items(.data)[expr].lhs = ident;
+
+                const loc = self.tok_locs[ident];
+                const val = self.source[loc.start..loc.end];
+
+                std.debug.print("{s}\n", .{val});
+
+                if (std.mem.eql(u8, val, "main")) {
+                    std.debug.print("{d}\n", .{self.nodes.items(.data)[expr].rhs});
+
+                    self.entry = self.nodes.items(.data)[expr].rhs;
+                }
+
                 return expr;
             }
 
@@ -386,6 +400,7 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
 
             self.expectNext(.rparen);
             self.nodes.items(.data)[call].rhs = try self.addCall(.{ .args = args });
+            continue;
         }
 
         break;

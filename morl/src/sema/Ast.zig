@@ -14,6 +14,7 @@ conds: std.ArrayList(Cond),
 loops: std.ArrayList(Loop),
 stmts: std.ArrayList(usize),
 
+entry: usize,
 source: []const u8,
 tokens: TokenList.Slice,
 
@@ -37,6 +38,7 @@ pub const Node = struct {
         num_expr,
         str_expr,
         bol_expr,
+        vod_expr,
 
         unary_expr,
         binary_expr,
@@ -108,6 +110,7 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     return .{
         .source = source,
         .tokens = tokens.toOwnedSlice(),
+        .entry = parser.entry,
         .stmts = parser.stmts,
         .calls = parser.calls,
         .conds = parser.conds,

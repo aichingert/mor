@@ -2,6 +2,19 @@ section .text
 
 global _start
 
+fib:
+    pop rax,
+
+    cmp rax, 1
+    jg  val
+    push qword 1
+    ret
+val:
+
+    call fib
+
+    ret
+
 _start:
 
     push qword 1
