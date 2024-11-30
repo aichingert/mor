@@ -1,24 +1,21 @@
 main :: () {
-    a : i32 = 10
+    a : i32 = 1
     b : i32 = 0
+    c : i32 = 0
 
-    while a {
-        b = b + 2
+    i : i32 = 7
 
-        if a == 5 {
-            $asm(
-                "mov rax, 60",
-                "mov rdi, b",
-                "syscall"
-            )
-        }
+    while i {
+        c = a + b
+        b = a
+        a = c
 
-        a = a - 1
+        i = i - 1
     }
 
     $asm(
         "mov rax, 60",
-        "mov rdi, b",
+        "mov rdi, a",
         "syscall"
     )
 }
