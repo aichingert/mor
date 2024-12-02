@@ -1,3 +1,11 @@
+fib :: (n: i32) -> i32 {
+    if n <= 1 {
+        return 1
+    }
+
+    return fib(n - 1) + fib(n - 2)
+}
+
 main :: () {
     a : i32 = 1
     b : i32 = 0
@@ -13,9 +21,11 @@ main :: () {
         i = i - 1
     }
 
+    n := fib(7)
+
     $asm(
         "mov rax, 60",
-        "mov rdi, a",
+        "mov rdi, n",
         "syscall"
     )
 }

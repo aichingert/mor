@@ -96,6 +96,8 @@ fn addLoop(self: *Self, loop: Ast.Loop) std.mem.Allocator.Error!usize {
 
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
+        std.debug.print("parse: {any} | ", .{self.peekTag()});
+
         try self.stmts.append(switch (self.peekTag()) {
             .identifier => try self.parseDeclare(),
             else => {
@@ -205,6 +207,10 @@ fn parseCompMacroCall(self: *Self) std.mem.Allocator.Error!usize {
 
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const ident = try self.parsePrefix();
+    const l = self.tok_locs[ident];
+    const v = self.source[l.start..l.end];
+
+    std.debug.print("START {any}\n", .{v});
 
     if (self.peekTag() == .equal) {
         return self.addNode(.{
@@ -227,13 +233,15 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
         .colon, .equal => {
             const expr = try self.parseDeclareExpression();
 
+            std.debug.print("HERE [{any}]?!\n", .{self.nodes.items(.tag)[expr]});
+
             if (self.nodes.items(.tag)[expr] == .function_declare) {
                 self.nodes.items(.data)[expr].lhs = ident;
 
                 const loc = self.tok_locs[ident];
                 const val = self.source[loc.start..loc.end];
 
-                std.debug.print("{s}\n", .{val});
+                std.debug.print("declare '{s}'\n", .{val});
 
                 if (std.mem.eql(u8, val, "main")) {
                     std.debug.print("{d}\n", .{self.nodes.items(.data)[expr].rhs});
@@ -254,6 +262,8 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
             });
         },
         .semicolon => {
+            std.debug.print("semicolon: {any}\n", .{self.tok_tags[next]});
+
             // TODO: create own error types
             if (type_ident == -1) return std.mem.Allocator.Error.OutOfMemory;
 
@@ -267,13 +277,14 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
             });
         },
         else => {
-            std.debug.print("{any}\n", .{self.tok_tags[next]});
+            std.debug.print("dec_else: {any}\n", .{self.tok_tags[next]});
             @panic("expected constant or mutable declare but got ^");
         },
     }
 }
 
 fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
+    std.debug.print("TAG: {any}\n", .{self.peekTag()});
     switch (self.peekTag()) {
         .lparen => return self.parseFunc(),
         else => return self.parseExpr(0),
@@ -282,6 +293,7 @@ fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
 
 // TODO: use actual types instead of identifiers
 fn parseFunc(self: *Self) !usize {
+    std.debug.print("Append Func\n", .{});
     self.expectNext(.lparen);
 
     var args = std.ArrayList(usize).init(self.gpa);
@@ -318,6 +330,8 @@ fn parseFunc(self: *Self) !usize {
     }
 
     const body = try self.parseFuncBody();
+
+    std.debug.print("END FNC -> {any}\n", .{self.peekTag()});
 
     return self.addNode(.{
         .tag = .function_declare,
@@ -416,7 +430,12 @@ fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
     switch (tag) {
         .identifier, .string_lit, .number_lit => {
             return self.addNode(.{
-                .tag = if (tag == .string_lit) .str_expr else if (tag == .number_lit) .num_expr else .ident,
+                .tag = if (tag == .string_lit)
+                    .str_expr
+                else if (tag == .number_lit)
+                    .num_expr
+                else
+                    .ident,
                 .main = self.nextToken(),
                 .data = undefined,
             });

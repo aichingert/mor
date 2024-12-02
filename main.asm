@@ -3,32 +3,45 @@ section .text
 global _start
 
 fib:
-    pop rax,
+    push rbp
+    mov rbp, rsp
 
-    cmp rax, 1
-    jg  val
-    push qword 1
-    ret
-val:
+    mov rcx, qword [rbp + 24]
+    cmp rcx, 1
+    jg  .compute
+    mov qword [rbp + 16], 1
+    jmp .return
+    .compute:
 
+    sub rsp, 16
+    mov rax, qword [rbp + 24]
+    sub rax, 1
+    mov [rsp + 8], rax
+    mov qword [rsp], 0
     call fib
+    mov rax, [rsp]
+    mov [rbp + 16], rax
 
+    mov rax, qword [rbp + 24]
+    sub rax, 2
+    mov [rsp + 8], rax
+    mov qword [rsp], 0
+    call fib
+    mov rax, [rsp]
+    add [rbp + 16], rax
+    mov rcx, [rbp + 16]
+
+    .return:
+    mov rsp, rbp
+    pop rbp
     ret
 
 _start:
+    push qword 9
+    sub rsp, 8
+    call fib
 
-    push qword 1
+    pop rdi
 
-    mov rax, 0
-
-    cmp rax, 0
-    je  if_false
-    push qword 2
-    jmp both
-if_false:
-    push qword 3
-both:
-
-    mov rdi, [rsp]
     mov rax, 60
     syscall

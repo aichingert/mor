@@ -102,15 +102,16 @@ fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
     if (lhs == .variable) {
         switch (rhs) {
-            .immediate => try movVarImm(lhs.variable, rhs.immediate, buffer),
             .register => try movVarReg(lhs.variable, rhs.register, buffer),
-            .variable => {},
+            .variable, .parameter => {},
+            .immediate => try movVarImm(lhs.variable, rhs.immediate, buffer),
         }
     } else {
         switch (rhs) {
             .immediate => try movRegImm(lhs.register, rhs.immediate, buffer),
             .register => try movRegReg(lhs.register, rhs.register, buffer),
             .variable => try movRegVar(lhs.register, rhs.variable, buffer),
+            .parameter => {},
         }
     }
 }
@@ -189,7 +190,7 @@ fn movVarReg(offset: u32, rhs: u8, buffer: *std.ArrayList(u8)) !void {
 fn pop(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (lhs) {
         .immediate => std.debug.panic("Pop immediate?\n", .{}),
-        .variable => {
+        .variable, .parameter => {
             // 8F /0
             //try buffer.append(0x8F);
             //try buffer.append(0xB4);
@@ -211,6 +212,7 @@ fn push(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
             try buffer.append(0x50);
         },
         .variable => try pushVariable(lhs.variable, buffer),
+        .parameter => {},
         .register => try buffer.append(0x50 + lhs.register),
     }
 }

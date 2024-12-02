@@ -17,19 +17,23 @@ gpa: std.mem.Allocator,
 instructions: std.ArrayList(Instr),
 
 const Context = struct {
+    rb: u32,
     sp: u32,
+    params: std.StringHashMap(u32),
     locals: std.StringHashMap(u32),
 };
 
 pub const Operand = union(enum) {
     register: u8,
     variable: u32,
+    parameter: u32,
     immediate: i64,
 
     fn print(self: Operand) void {
         switch (self) {
             .register => std.debug.print("rg{d}", .{self.register}),
             .variable => std.debug.print("[sp + {d}]", .{self.variable}),
+            .parameter => std.debug.print("[bp + {d}]", .{self.parameter}),
             .immediate => std.debug.print("{d}", .{self.immediate}),
         }
     }
@@ -133,18 +137,26 @@ pub fn genInstructions(self: *Self) !void {
     self.instructions = std.ArrayList(Instr).init(self.gpa);
 
     var ctx: Context = .{
+        .rb = 0,
         .sp = 0,
+        .params = std.StringHashMap(u32).init(self.gpa),
         .locals = std.StringHashMap(u32).init(self.gpa),
     };
     defer ctx.locals.deinit();
 
+    std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)});
+    try self.genFromStatement(self.ast.entry, &ctx);
+
     // TODO: support multiple top level statements (like other functions and imports)
-    try self.genFromStatement(self.ast.stmts.items[0], &ctx);
+    for (self.ast.stmts.items) |stmt| {
+        std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)[stmt]});
+    }
 }
 
 fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
     const data = self.ast.nodes.items(.data)[stmt];
 
+    std.debug.print("{}\n", .{self.ast.nodes.items(.tag)[stmt]});
     switch (self.ast.nodes.items(.tag)[stmt]) {
         .mutable_declare, .constant_declare => {
             const tok = self.ast.nodes.items(.main)[data.lhs];
@@ -350,7 +362,9 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 try self.genFromStatement(func_stmt, ctx);
             }
         },
-        else => {},
+        else => {
+            std.debug.print("MISSING IMPL\n", .{});
+        },
     }
 }
 
@@ -373,7 +387,10 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
 
             const value = ctx.locals.get(ident);
             if (value == null) {
-                std.debug.print("TODO: better debug info but use of unknown var\n", .{});
+                std.debug.print(
+                    "TODO: better debug info but use of unknown var [{s}]\n",
+                    .{ident},
+                );
                 std.process.exit(1);
             }
 
