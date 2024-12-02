@@ -1,6 +1,6 @@
 = morl
 aichingert
-:icons: font
+:icons: font 
 :toc:
 :toclevels: 3
 :experimental:
@@ -11,22 +11,36 @@ the mor programming language
 
 [source, mor]
 ----
+// TODO: currently working on functions so they 
+// do not work right now but should very soon
+fib :: (n: i32) -> i32 {
+    if n <= 1 {
+        return 1
+    }
 
-hello :: () {
-    var := 10
-    add := var * 2 - 10
-
-    // TODO: I have to think about the 
-    // standard library a bit more 
-    // println("hello")
+    return fib(n - 1) + fib(n - 2)
 }
 
+// NOTE: semicolons are currently not used
+// but should be in the future
+main :: () {
+    amount := 20
+
+    result := fib(amount)
+}
 ----
+
+== features
+
+Should be reasonable fast and low level to properly interact with the operating system. 
+This is currently achieved by the $asm() compiler-macro which can be used to make syscalls
+and store the values of the registers into variables.
+It should also provide some zero cost abstractions to make things simpler and not slower as well as
+some reasonable syntax sugar for certain cases (e.g. indexing from the back of an array or container)
 
 == resources
 
-https://refspecs.linuxfoundation.org/elf/elf.pdf[elf spec^]
-https://build-your-own.org/blog/20230219_elf_craft/[elf^]
-https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html[intel_instr^]
-
-https://defuse.ca/online-x86-assembler.htm#disassembly2[helpfull^]
+* https://refspecs.linuxfoundation.org/elf/elf.pdf[Elf specification^]
+* https://build-your-own.org/blog/20230219_elf_craft/[Information about building an Elf generator^]
+* https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html[x86-64 Instruction set^]
+* https://defuse.ca/online-x86-assembler.htm#disassembly2[Online disassembler^]
