@@ -144,19 +144,19 @@ pub fn genInstructions(self: *Self) !void {
     };
     defer ctx.locals.deinit();
 
-    std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)});
-    try self.genFromStatement(self.ast.entry, &ctx);
-
     // TODO: support multiple top level statements (like other functions and imports)
     for (self.ast.stmts.items) |stmt| {
         std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)[stmt]});
     }
+
+    try self.genFromStatement(self.ast.entry, &ctx);
 }
 
 fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
     const data = self.ast.nodes.items(.data)[stmt];
 
     std.debug.print("{}\n", .{self.ast.nodes.items(.tag)[stmt]});
+
     switch (self.ast.nodes.items(.tag)[stmt]) {
         .mutable_declare, .constant_declare => {
             const tok = self.ast.nodes.items(.main)[data.lhs];

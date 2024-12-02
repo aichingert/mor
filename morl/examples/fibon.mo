@@ -25,7 +25,7 @@ main :: () {
 
     $asm(
         "mov rax, 60",
-        "mov rdi, n",
+        "mov rdi, a",
         "syscall"
     )
 }

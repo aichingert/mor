@@ -99,9 +99,6 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
 
     while (true) {
         const token = lexer.genNext();
-
-        std.debug.print("{any}\n", .{token});
-
         try tokens.append(gpa, token);
         if (token.tag == .eof) break;
     }
