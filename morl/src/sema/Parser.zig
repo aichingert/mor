@@ -7,7 +7,6 @@ const Self = @This();
 gpa: std.mem.Allocator,
 
 tok_i: usize,
-entry: usize,
 tok_tags: []const Token.Tag,
 tok_locs: []const Token.Loc,
 
@@ -18,6 +17,7 @@ calls: std.ArrayList(Ast.Call),
 conds: std.ArrayList(Ast.Cond),
 loops: std.ArrayList(Ast.Loop),
 stmts: std.ArrayList(usize),
+func_res: std.StringHashMap(usize),
 
 pub fn init(
     gpa: std.mem.Allocator,
@@ -27,7 +27,6 @@ pub fn init(
 ) Self {
     return .{
         .gpa = gpa,
-        .entry = std.math.maxInt(usize),
         .tok_i = 0,
         .tok_tags = tok_tags,
         .tok_locs = tok_locs,
@@ -35,8 +34,9 @@ pub fn init(
         .conds = std.ArrayList(Ast.Cond).init(gpa),
         .loops = std.ArrayList(Ast.Loop).init(gpa),
         .calls = std.ArrayList(Ast.Call).init(gpa),
-        .funcs = Ast.FuncList{},
         .nodes = Ast.NodeList{},
+        .funcs = Ast.FuncList{},
+        .func_res = std.StringHashMap(usize).init(gpa),
         .source = source,
     };
 }
@@ -110,9 +110,7 @@ pub fn parse(self: *Self) std.mem.Allocator.Error!void {
                 const loc = self.tok_locs[ident];
                 const val = self.source[loc.start..loc.end];
 
-                if (std.mem.eql(u8, val, "main")) {
-                    self.entry = res;
-                }
+                try self.func_res.put(val, res);
             },
             else => {
                 std.debug.print("ERROR(parser/stmt): invalid tag for stmt begin [{any}]", .{self.peekTag()});
@@ -238,9 +236,10 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     }
 
     const next = self.nextToken();
-
     switch (self.tok_tags[next]) {
         .colon, .equal => {
+            std.debug.print("{any} {any}\n", .{ self.tok_tags[next], node });
+
             const expr = try self.parseDeclareExpression();
 
             if (self.nodes.items(.tag)[expr] == .function_declare) {
@@ -313,7 +312,7 @@ fn parseFunc(self: *Self) !usize {
     self.expectNext(.rparen);
 
     // TODO: implement actual types
-    var default_ret_typ: Token.Tag = .identifier;
+    var default_ret_typ: Token.Tag = .invalid;
 
     if (self.tok_tags[self.nextToken()] == .arrow) {
         default_ret_typ = self.tok_tags[self.nextToken()];

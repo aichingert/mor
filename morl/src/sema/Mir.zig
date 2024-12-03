@@ -16,6 +16,11 @@ ast: Ast,
 gpa: std.mem.Allocator,
 instructions: std.ArrayList(Instr),
 
+// TODO: remove rb since it is only used for
+// arguments and does not change within the func
+// also should only have one StringHashMap with
+// a struct containing information if it is a
+// local variable or argument
 const Context = struct {
     rb: u32,
     sp: u32,
@@ -86,6 +91,7 @@ pub const Instr = struct {
         cmovl,
         cmovle,
 
+        ret,
         cmp,
         jmp,
         je,
@@ -142,20 +148,24 @@ pub fn genInstructions(self: *Self) !void {
         .params = std.StringHashMap(u32).init(self.gpa),
         .locals = std.StringHashMap(u32).init(self.gpa),
     };
+    defer ctx.params.deinit();
     defer ctx.locals.deinit();
+
+    //const call = try self.addNode(.{
+    //    .tag = .call_expr,
+    //    .main = self.nextToken(),
+    //    .data = .{ .lhs = node, .rhs = undefined },
+    //});
 
     // TODO: support multiple top level statements (like other functions and imports)
     for (self.ast.stmts.items) |stmt| {
         std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)[stmt]});
+        try self.genFromStatement(stmt, &ctx);
     }
-
-    try self.genFromStatement(self.ast.entry, &ctx);
 }
 
 fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
     const data = self.ast.nodes.items(.data)[stmt];
-
-    std.debug.print("{}\n", .{self.ast.nodes.items(.tag)[stmt]});
 
     switch (self.ast.nodes.items(.tag)[stmt]) {
         .mutable_declare, .constant_declare => {
@@ -358,9 +368,52 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             }
         },
         .function_declare => {
-            for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
-                try self.genFromStatement(func_stmt, ctx);
+            try self.instructions.append(.{
+                .tag = .push,
+                .lhs = .{ .register = 5 },
+            });
+            try self.instructions.append(.{
+                .tag = .mov,
+                .lhs = .{ .register = 5 },
+                .rhs = .{ .register = 4 },
+            });
+
+            var func_ctx: Context = .{
+                .rb = if (self.ast.funcs.items(.return_type)[data.rhs] != .invalid) 16 else 8,
+                .sp = 0,
+                .params = std.StringHashMap(u32).init(self.gpa),
+                .locals = std.StringHashMap(u32).init(self.gpa),
+            };
+
+            const params = self.ast.funcs.items(.args)[data.rhs];
+            std.debug.print("{any}\n", .{params});
+
+            for (params.items) |param| {
+                const tok = self.ast.nodes.items(.data)[param].lhs;
+                const loc = self.ast.tokens.items(.loc)[tok];
+                const val = self.ast.source[loc.start..loc.end];
+
+                std.debug.print("{s}\n", .{val});
+                try func_ctx.params.put(val, func_ctx.rb);
+                func_ctx.rb += 8;
             }
+
+            std.debug.print("{any}\n", .{func_ctx});
+
+            for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
+                try self.genFromStatement(func_stmt, &func_ctx);
+            }
+
+            try self.instructions.append(.{
+                .tag = .mov,
+                .lhs = .{ .register = 4 },
+                .rhs = .{ .register = 5 },
+            });
+            try self.instructions.append(.{
+                .tag = .pop,
+                .lhs = .{ .register = 5 },
+            });
+            try self.instructions.append(.{ .tag = .ret });
         },
         else => {
             std.debug.print("MISSING IMPL\n", .{});

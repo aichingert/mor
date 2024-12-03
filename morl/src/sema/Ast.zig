@@ -13,8 +13,8 @@ calls: std.ArrayList(Call),
 conds: std.ArrayList(Cond),
 loops: std.ArrayList(Loop),
 stmts: std.ArrayList(usize),
+func_res: std.StringHashMap(usize),
 
-entry: usize,
 source: []const u8,
 tokens: TokenList.Slice,
 
@@ -110,13 +110,13 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     return .{
         .source = source,
         .tokens = tokens.toOwnedSlice(),
-        .entry = parser.entry,
         .stmts = parser.stmts,
         .calls = parser.calls,
         .conds = parser.conds,
         .loops = parser.loops,
         .nodes = parser.nodes.toOwnedSlice(),
         .funcs = parser.funcs.toOwnedSlice(),
+        .func_res = parser.func_res,
     };
 }
 
@@ -145,5 +145,6 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     self.nodes.deinit(gpa);
     self.funcs.deinit(gpa);
     self.tokens.deinit(gpa);
+    self.func_res.deinit();
     self.* = undefined;
 }
