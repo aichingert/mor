@@ -218,7 +218,11 @@ fn parseCompMacroCall(self: *Self) std.mem.Allocator.Error!usize {
 }
 
 fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
-    const node = try self.parsePrefix();
+    const node = try self.parseExpr(0);
+
+    if (self.nodes.items(.tag)[node] == .call_expr) {
+        return node;
+    }
 
     if (self.peekTag() == .equal) {
         return self.addNode(.{
@@ -363,6 +367,10 @@ fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
 fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
     var node = try self.parsePrefix();
 
+    if (node == std.math.maxInt(usize)) {
+        return node;
+    }
+
     while (self.peekTag() != .eof) {
         const tag = self.peekTag();
 
@@ -382,6 +390,7 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
             continue;
         }
 
+        std.debug.print("Parse Expr: {any}\n", .{tag});
         if (self.nodes.items(.tag)[node] == .ident and tag == .lparen) {
             const call = try self.addNode(.{
                 .tag = .call_expr,
@@ -445,6 +454,6 @@ fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
     }
 
     // TODO: replace with unit type or void
-    _ = self.nextToken();
-    return 0;
+    // _ = self.nextToken();
+    return std.math.maxInt(usize);
 }

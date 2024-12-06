@@ -26,6 +26,50 @@ const Context = struct {
     sp: u32,
     params: std.StringHashMap(u32),
     locals: std.StringHashMap(u32),
+
+    fn pushVariableOnStack(self: *Context, mir: *Self, ident: []const u8) !void {
+        if (self.locals.get(ident)) |local| {
+            try mir.instructions.append(.{
+                .tag = .push,
+                .lhs = .{ .variable = self.sp - local },
+            });
+            return;
+        }
+
+        if (self.params.get(ident)) |param| {
+            try mir.instructions.append(.{
+                .tag = .push,
+                .lhs = .{ .parameter = self.rb - param },
+            });
+            return;
+        }
+
+        std.debug.print("Error: use of unknown var [{s}]\n", .{ident});
+        std.process.exit(1);
+    }
+
+    fn setVariableFromStack(self: *Context, mir: *Self, ident: []const u8) !void {
+        try mir.instructions.append(.{
+            .tag = .pop,
+            .lhs = .{ .register = 0 },
+        });
+        self.sp -= 8;
+
+        if (self.locals.get(ident)) |local| {
+            try mir.instructions.append(.{
+                .tag = .mov,
+                .lhs = .{ .variable = self.sp - local },
+                .rhs = .{ .register = 0 },
+            });
+        }
+
+        if (self.params.contains(ident)) {
+            std.debug.print("Error: function params are immutable [{s}]\n", .{ident});
+        } else {
+            std.debug.print("Error: reassigning unknown variable [{s}]\n", .{ident});
+        }
+        std.process.exit(1);
+    }
 };
 
 pub const Operand = union(enum) {
@@ -157,7 +201,9 @@ pub fn genInstructions(self: *Self) !void {
     //    .data = .{ .lhs = node, .rhs = undefined },
     //});
 
-    // TODO: support multiple top level statements (like other functions and imports)
+    // TODO: support multiple top level statements
+    // (like other functions and imports)
+
     for (self.ast.stmts.items) |stmt| {
         std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)[stmt]});
         try self.genFromStatement(stmt, &ctx);
@@ -179,25 +225,9 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
         .assign_stmt => {
             const tok = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[tok];
-            const ident = self.ast.source[loc.start..loc.end];
 
-            const value = ctx.locals.get(ident);
-            if (value == null) {
-                std.debug.print("ERROR: reassign to unknown var\n", .{});
-                std.process.exit(1);
-            }
             try self.genFromExpression(data.rhs, ctx);
-            try self.instructions.append(.{
-                .tag = .pop,
-                .lhs = .{ .register = 1 },
-            });
-            ctx.sp -= 8;
-
-            try self.instructions.append(.{
-                .tag = .mov,
-                .lhs = .{ .variable = ctx.sp - value.? },
-                .rhs = .{ .register = 1 },
-            });
+            try ctx.setVariableFromStack(self, self.ast.source[loc.start..loc.end]);
         },
         .if_expr => {
             // cmp cond-1
@@ -379,29 +409,50 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             });
 
             var func_ctx: Context = .{
-                .rb = if (self.ast.funcs.items(.return_type)[data.rhs] != .invalid) 16 else 8,
+                .rb = 0,
                 .sp = 0,
                 .params = std.StringHashMap(u32).init(self.gpa),
                 .locals = std.StringHashMap(u32).init(self.gpa),
             };
 
-            const params = self.ast.funcs.items(.args)[data.rhs];
-            std.debug.print("{any}\n", .{params});
-
-            for (params.items) |param| {
+            for (self.ast.funcs.items(.args)[data.rhs].items) |param| {
                 const tok = self.ast.nodes.items(.data)[param].lhs;
                 const loc = self.ast.tokens.items(.loc)[tok];
                 const val = self.ast.source[loc.start..loc.end];
 
-                std.debug.print("{s}\n", .{val});
-                try func_ctx.params.put(val, func_ctx.rb);
                 func_ctx.rb += 8;
+                try func_ctx.params.put(val, func_ctx.rb);
             }
 
-            std.debug.print("{any}\n", .{func_ctx});
+            const ret_typ = self.ast.funcs.items(.return_type)[data.rhs];
+            func_ctx.rb += if (ret_typ != .invalid) 16 else 8;
 
             for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
                 try self.genFromStatement(func_stmt, &func_ctx);
+            }
+
+            try self.instructions.append(.{
+                .tag = .mov,
+                .lhs = .{ .register = 4 },
+                .rhs = .{ .register = 5 },
+            });
+            try self.instructions.append(.{
+                .tag = .pop,
+                .lhs = .{ .register = 5 },
+            });
+            try self.instructions.append(.{ .tag = .ret });
+        },
+        .return_stmt => {
+            if (data.lhs == std.math.maxInt(usize)) {
+                try self.instructions.append(.{
+                    .tag = .pop,
+                    .lhs = .{ .register = 0 },
+                });
+                try self.instructions.append(.{
+                    .tag = .mov,
+                    .lhs = .{ .parameter = 16 },
+                    .rhs = .{ .register = 0 },
+                });
             }
 
             try self.instructions.append(.{
@@ -424,6 +475,8 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
 fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
     const data = self.ast.nodes.items(.data)[expr];
     const main = self.ast.nodes.items(.main)[expr];
+    // NOTE: expression evaluation *ALWAYS* puts something on the stack
+    defer ctx.sp += 8;
 
     switch (self.ast.nodes.items(.tag)[expr]) {
         .num_expr => {
@@ -432,23 +485,11 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             const num = try std.fmt.parseInt(i64, lit, 10);
 
             try self.instructions.append(.{ .tag = .push, .lhs = .{ .immediate = num } });
-            ctx.sp += 8;
         },
         .ident => {
             const loc = self.ast.tokens.items(.loc)[main];
-            const ident = self.ast.source[loc.start..loc.end];
 
-            const value = ctx.locals.get(ident);
-            if (value == null) {
-                std.debug.print(
-                    "TODO: better debug info but use of unknown var [{s}]\n",
-                    .{ident},
-                );
-                std.process.exit(1);
-            }
-
-            try self.instructions.append(.{ .tag = .push, .lhs = .{ .variable = ctx.sp - value.? } });
-            ctx.sp += 8;
+            try ctx.pushVariableOnStack(self, self.ast.source[loc.start..loc.end]);
         },
         .binary_expr => {
             try self.genFromExpression(data.lhs, ctx);
@@ -487,7 +528,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                         .tag = .push,
                         .lhs = .{ .register = 2 },
                     });
-                    ctx.sp += 8;
                 },
                 .con_or, .con_and => {
                     try self.instructions.append(.{
@@ -516,7 +556,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                         .tag = .push,
                         .lhs = .{ .register = 2 },
                     });
-                    ctx.sp += 8;
                 },
                 else => {
                     try self.instructions.append(.{
@@ -528,7 +567,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                         .tag = .push,
                         .lhs = .{ .register = 0 },
                     });
-                    ctx.sp += 8;
                 },
             }
         },
@@ -551,7 +589,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .tag = .push,
                 .lhs = .{ .register = 0 },
             });
-            ctx.sp += 8;
         },
         else => {},
     }

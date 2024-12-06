@@ -9,8 +9,18 @@ fib:
     mov rcx, qword [rbp + 24]
     cmp rcx, 1
     jg  .compute
-    mov qword [rbp + 16], 1
-    jmp .return
+    ;; Parsing a return stmt
+    ;; return 10;
+
+    ;; Parse expression evalution
+    push qword 1
+    pop rax
+
+    ;; Function epiloge
+    mov [rbp + 16], rax ;; set the value 10 to the return position
+    mov rsp, rbp        ;; ...
+    pop rbp             ;; ...
+    ret                 ;; ...
     .compute:
 
     sub rsp, 16
@@ -37,7 +47,7 @@ fib:
     ret
 
 _start:
-    push qword 9
+    push qword 5
     sub rsp, 8
     call fib
 
