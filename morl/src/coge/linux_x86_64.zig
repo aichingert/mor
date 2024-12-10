@@ -3,7 +3,12 @@ const std = @import("std");
 const Elf = @import("../Elf.zig");
 const Mir = @import("../sema/Mir.zig");
 
-pub const sys_exit = [_]u8{ 0x48, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, 0x0f, 0x05 };
+// ModR/M:
+// Bit 	  76   |   543 	|  210
+// Usage "Mod" |  "Reg" | "R/M"
+const rex_w: u8 = 0x48;
+
+pub const sys_exit = [_]u8{ rex_w, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, 0x0f, 0x05 };
 
 // /r reg and r/m are registers
 pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
@@ -81,14 +86,14 @@ fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
 // cmp := REX.W + 3B /r
 fn cmpRegReg(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0x3B);
     try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
 }
 
 // cmp := REX.W + 81 /7 id
 fn cmpRegImm(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0x81);
     try buffer.append(0b11111000 | lhs.register);
 
@@ -100,20 +105,95 @@ fn cmpRegImm(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !vo
 fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs == .immediate) @panic("ERROR(compiler): cannot mov into immediate");
 
-    if (lhs == .variable) {
-        switch (rhs) {
-            .register => try movVarReg(lhs.variable, rhs.register, buffer),
-            .variable, .parameter => {},
-            .immediate => try movVarImm(lhs.variable, rhs.immediate, buffer),
-        }
-    } else {
-        switch (rhs) {
-            .immediate => try movRegImm(lhs.register, rhs.immediate, buffer),
-            .register => try movRegReg(lhs.register, rhs.register, buffer),
-            .variable => try movRegVar(lhs.register, rhs.variable, buffer),
-            .parameter => {},
-        }
+    switch (lhs) {
+        .register => try movReg(lhs.register, rhs, buffer),
+        .variable => try movSp(lhs.variable, rhs, buffer),
+        .parameter => try movBp(lhs.parameter, rhs, buffer),
+        else => @panic("unreachable"),
     }
+}
+
+fn movReg(reg: u8, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    switch (rhs) {
+        .variable => try movRegSp(reg, rhs.variable, buffer),
+        .register => try movRegReg(reg, rhs.register, buffer),
+        .parameter => try movRegBp(reg, rhs.parameter, buffer),
+        .immediate => try movRegImm(reg, rhs.immediate, buffer),
+    }
+}
+
+fn movSp(off: u32, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (rhs == .variable or rhs == .parameter)
+        @panic("ERROR(compiler): cannot mov value from memory to memory");
+
+    switch (rhs) {
+        .register => try movSpReg(off, rhs.register, buffer),
+        .immediate => try movSpImm(off, rhs.immediate, buffer),
+        else => @panic("unreachable"),
+    }
+}
+
+fn movBp(off: u32, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (rhs == .variable or rhs == .parameter)
+        @panic("ERROR(compiler): cannot mov value from memory to memory");
+
+    switch (rhs) {
+        .register => try movBpReg(off, rhs.register, buffer),
+        .immediate => try movBpImm(off, rhs.immediate, buffer),
+        else => @panic("unreachable"),
+    }
+}
+
+// mov: REX.W + 8B /r | (r64, r/m64)
+fn movRegSp(reg: u8, off: u32, buffer: *std.ArrayList(u8)) !void {
+    // 0x24 => SIB - byte
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x8B, 0b10000100 | reg << 3, 0x24 });
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, off, .little);
+    try buffer.appendSlice(&buf);
+}
+
+// mov: REX.W + 8B /r | (r64, r/m64) r/m64 into r64
+fn movRegReg(lhs: u8, rhs: u8, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x8B, 0b11000000 | lhs << 3 | rhs });
+}
+
+// mov: REX.W + 8B /r | (r64, r/m64)
+fn movRegBp(lhs: u8, off: u32, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x8B });
+    _ = lhs;
+    _ = off;
+}
+
+fn movRegImm(lhs: u8, imm: i64, buffer: *std.ArrayList(u8)) !void {
+    _ = lhs;
+    _ = imm;
+    _ = buffer;
+}
+
+fn movSpReg(off: u32, reg: u8, buffer: *std.ArrayList(u8)) !void {
+    _ = off;
+    _ = reg;
+    _ = buffer;
+}
+
+fn movSpImm(off: u32, imm: i64, buffer: *std.ArrayList(u8)) !void {
+    _ = off;
+    _ = imm;
+    _ = buffer;
+}
+
+fn movBpReg(off: u32, reg: u8, buffer: *std.ArrayList(u8)) !void {
+    _ = off;
+    _ = reg;
+    _ = buffer;
+}
+
+fn movBpImm(off: u32, imm: i64, buffer: *std.ArrayList(u8)) !void {
+    _ = off;
+    _ = imm;
+    _ = buffer;
 }
 
 // cmov: REX.W + 0F __ /r | (r64, r/m64)
@@ -122,69 +202,7 @@ fn cmov(lhs: Mir.Operand, rhs: Mir.Operand, op: u8, buffer: *std.ArrayList(u8)) 
 
     // NOTE: using register 5 here since 0, 1, ... could be used by the intermediate representation
     try movRegImm(5, rhs.immediate, buffer);
-    try buffer.appendSlice(&[_]u8{ 0x48, 0x0F, op, 0b11000101 | (lhs.register << 3) });
-}
-
-fn movRegImm(reg: u8, imm64: i64, buffer: *std.ArrayList(u8)) !void {
-    // 0x40
-    // B8 + rd io
-    // Rex.W
-    //     |
-    // 01001000
-    //
-    //        1
-    //       2
-    //      4
-    //     8
-    //    16
-    //   32
-    //  64
-    // 4 * 16 => 64 + 8 72 => 0x48
-
-    try buffer.append(0x48);
-    try buffer.append(0xb8 + reg);
-
-    var buf: [8]u8 = undefined;
-    std.mem.writeInt(i64, &buf, imm64, .little);
-    try buffer.appendSlice(&buf);
-}
-
-fn movVarImm(offset: u32, imm64: i64, buffer: *std.ArrayList(u8)) !void {
-    try movRegImm(0, imm64, buffer);
-    try movVarReg(offset, 0, buffer);
-}
-
-fn movRegReg(lhs: u8, rhs: u8, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
-    try buffer.append(0x89);
-
-    // MOD REG R/M
-    // 10  110 100
-    try buffer.append(0b11000000 | rhs << 3 | lhs);
-}
-
-fn movRegVar(lhs: u8, offset: u32, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
-    try buffer.append(0x8B);
-
-    try buffer.append(0b10000100 | lhs << 3);
-    try buffer.append(0b10100100);
-
-    var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, offset, .little);
-    try buffer.appendSlice(&buf);
-}
-
-fn movVarReg(offset: u32, rhs: u8, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
-    try buffer.append(0x89);
-
-    try buffer.append(0b10000100 | rhs << 3);
-    try buffer.append(0b10100100);
-
-    var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, offset, .little);
-    try buffer.appendSlice(&buf);
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x0F, op, 0b11000101 | (lhs.register << 3) });
 }
 
 fn pop(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
@@ -250,7 +268,7 @@ fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     // Instruction: REX.W + 33 /r
 
     // REX.W
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0x33);
 
     // ModR/M
@@ -264,26 +282,26 @@ fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 fn bit_or(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .register or rhs != .register) @panic("ERROR(coge/bit_or): only support reg/reg");
 
-    try buffer.appendSlice(&[_]u8{ 0x48, 0x0B, 0b11000000 | (lhs.register << 3) | rhs.register });
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x0B, 0b11000000 | (lhs.register << 3) | rhs.register });
 }
 
 // or := REX.W + 23 /r
 fn bit_and(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .register or rhs != .register) @panic("ERROR(coge/bit_and): only support reg/reg");
 
-    try buffer.appendSlice(&[_]u8{ 0x48, 0x23, 0b11000000 | (lhs.register << 3) | rhs.register });
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x23, 0b11000000 | (lhs.register << 3) | rhs.register });
 }
 
 // add := REX.W + 01 /r
 fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0x01);
     try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
 }
 
 // sub := REX.W + 2B /r
 fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0x29);
     try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
 
@@ -297,7 +315,7 @@ fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .register and lhs.register != 0) @panic("ERROR(coge/mul): lhs is not rax");
     if (rhs != .register) @panic("ERROR(coge/mul): rhs is not a register");
 
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0xF7);
     try buffer.append(0b11100000 | rhs.register);
 
@@ -312,7 +330,7 @@ fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
     // Rex.W
     // 01001000
-    try buffer.append(0x48);
+    try buffer.append(rex_w);
     try buffer.append(0xF7);
     // ModR/M
     // MR => r/m | reg

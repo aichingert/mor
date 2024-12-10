@@ -13,3 +13,5 @@ print_num :: (n: i32) {
 main :: () {
     print_num(10)
 }
+
+
