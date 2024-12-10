@@ -61,6 +61,8 @@ const Context = struct {
                 .lhs = .{ .variable = self.sp - local },
                 .rhs = .{ .register = 0 },
             });
+
+            return;
         }
 
         if (self.params.contains(ident)) {
@@ -135,7 +137,6 @@ pub const Instr = struct {
         cmovl,
         cmovle,
 
-        ret,
         cmp,
         jmp,
         je,
@@ -143,6 +144,8 @@ pub const Instr = struct {
         pop,
         push,
 
+        ret,
+        call,
         syscall,
 
         fn unaryFrom(token: lex.Token.Tag) Tag {
@@ -205,7 +208,7 @@ pub fn genInstructions(self: *Self) !void {
     // (like other functions and imports)
 
     for (self.ast.stmts.items) |stmt| {
-        std.debug.print("{any}\n", .{self.ast.nodes.items(.tag)[stmt]});
+        std.debug.print("Stmt: {any}\n", .{self.ast.nodes.items(.tag)[stmt]});
         try self.genFromStatement(stmt, &ctx);
     }
 }
@@ -398,6 +401,9 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             }
         },
         .function_declare => {
+            // TODO: maybe store function beginnings
+            // try self.funcs.put(f_ident, self.instructions.len);
+
             try self.instructions.append(.{
                 .tag = .push,
                 .lhs = .{ .register = 5 },
@@ -466,6 +472,12 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             });
             try self.instructions.append(.{ .tag = .ret });
         },
+        // TODO: call expression, find offets to the function
+        // it is calling e.g. func_a:
+        //      1. search function declare
+        //      2. calculate relative offset (+/-) to it (including the call instruction)
+        //          2.1 if negative two's compliment smth
+        //      3. update the offset for the call instruction
         else => {
             std.debug.print("MISSING IMPL\n", .{});
         },
