@@ -11,6 +11,12 @@ main :: () {
         a = c
 
         i = i - 1
+
+        $asm(
+            "mov rax, 60",
+            "mov rdi, i",
+            "syscall"
+        )
     }
 
     $asm(

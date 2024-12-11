@@ -235,7 +235,7 @@ pub fn genInstructions(self: *Self) !void {
         std.debug.print("CALL: {any}\n", .{inst});
 
         var func = fns.get(inst.lhs.?.variable).?;
-        var call = i;
+        var call = i + 1;
 
         var is_neg: i64 = 1;
         std.debug.print("func: {d} | call: {d}\n", .{ func, call });
@@ -248,6 +248,10 @@ pub fn genInstructions(self: *Self) !void {
         }
 
         self.instructions.items[i].lhs = .{ .immediate = 0 };
+
+        for (self.instructions.items[call..func]) |gen| {
+            std.debug.print("GEN: {any}\n", .{gen.tag});
+        }
 
         var bytes = try Asm.genCode(self.gpa, self.instructions.items[call..func]);
         const jump = is_neg * @as(i64, @intCast(bytes.items.len));

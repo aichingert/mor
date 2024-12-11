@@ -2,14 +2,16 @@ section .text
 
 global _start
 
+_start:
+    push qword 1
+    call print_num
+    mov rbx, 2
+
 print_num:
     mov rax, 60
     mov rdi, 0
     syscall
-
-_start:
-    push qword 1
-    call print_num
+    ret
 
 ;; section .text
 ;; 

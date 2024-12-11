@@ -40,7 +40,7 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
             .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
 
-            .ret => try machine_code.append(0x3C),
+            .ret => try machine_code.append(0xC3),
             .call => try call(item.lhs.?, &machine_code),
             .syscall => try syscall(&machine_code),
             else => {
@@ -76,13 +76,15 @@ fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try buffer.appendSlice(&buf);
 }
 
-// call := FF /2 | ModRM:r/m (r)
+// call := E8 cd | ModRM:r/m (r)
 fn call(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .immediate) @panic("ERROR(coge/call): only imm");
 
-    const rbx = 0b011;
-    try mov(.{ .register = rbx }, lhs, buffer);
-    try buffer.appendSlice(&[_]u8{ 0xFF, 0b11010000 | rbx });
+    try buffer.append(0xE8);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(i32, &buf, @intCast(lhs.immediate), .little);
+    try buffer.appendSlice(&buf);
 }
 
 fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
@@ -138,7 +140,7 @@ fn movStk(sreg: u8, off: u32, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !voi
         @panic("ERROR(compiler): cannot mov value from memory to memory");
 
     switch (rhs) {
-        .register => try movStkReg(sreg, rhs.register, off, buffer),
+        .register => try movRegStk(rhs.register, sreg, off, buffer),
         .immediate => try movStkImm(sreg, off, rhs.immediate, buffer),
         else => @panic("unreachable"),
     }
@@ -168,21 +170,12 @@ fn movRegImm(reg: u8, imm: i64, buffer: *std.ArrayList(u8)) !void {
     try buffer.appendSlice(&buf);
 }
 
-// mov: REX.W + 89 /r | (r/m64, r64)
-fn movStkReg(sreg: u8, reg: u8, off: u32, buffer: *std.ArrayList(u8)) !void {
-    try buffer.appendSlice(&[_]u8{ rex_w, 0x89, 0b10000000 | sreg << 3 | reg, 0x24 });
-
-    var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, off, .little);
-    try buffer.appendSlice(&buf);
-}
-
 fn movStkImm(sreg: u8, off: u32, imm: i64, buffer: *std.ArrayList(u8)) !void {
     // rbx -> since it is most likely not used...
     const rbx: u8 = 0b010;
 
     try movRegImm(rbx, imm, buffer);
-    try movStkReg(sreg, rbx, off, buffer);
+    try movRegStk(rbx, sreg, off, buffer);
 }
 
 // cmov: REX.W + 0F __ /r | (r64, r/m64)
