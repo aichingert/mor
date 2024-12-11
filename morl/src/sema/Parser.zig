@@ -390,7 +390,6 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
             continue;
         }
 
-        std.debug.print("Parse Expr: {any}\n", .{tag});
         if (self.nodes.items(.tag)[node] == .ident and tag == .lparen) {
             const call = try self.addNode(.{
                 .tag = .call_expr,

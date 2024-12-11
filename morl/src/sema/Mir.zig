@@ -189,7 +189,7 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
 pub fn genInstructions(self: *Self) !void {
     self.instructions = std.ArrayList(Instr).init(self.gpa);
 
-    var fns = std.StringHashMap(usize).init(self.gpa);
+    var fns = std.AutoHashMap(usize, usize).init(self.gpa);
     defer fns.deinit();
 
     var ctx: Context = .{
@@ -201,13 +201,24 @@ pub fn genInstructions(self: *Self) !void {
     defer ctx.params.deinit();
     defer ctx.locals.deinit();
 
-    //const call = try self.addNode(.{
-    //    .tag = .call_expr,
-    //    .main = self.nextToken(),
-    //    .data = .{ .lhs = node, .rhs = undefined },
-    //});
-
     // TODO: support multiple top level statements (like imports)
+
+    // Entry point:
+    try self.instructions.append(.{
+        .tag = .call,
+        .lhs = .{ .variable = @intCast(self.ast.func_res.get("main").?) },
+    });
+    try self.instructions.append(.{
+        .tag = .mov,
+        .lhs = .{ .register = 0 },
+        .rhs = .{ .immediate = 60 },
+    });
+    try self.instructions.append(.{
+        .tag = .mov,
+        .lhs = .{ .register = 7 },
+        .rhs = .{ .immediate = 0 },
+    });
+    try self.instructions.append(.{ .tag = .syscall });
 
     std.debug.print("CALLS: {d}\n", .{self.ast.calls.items.len});
 
@@ -219,13 +230,30 @@ pub fn genInstructions(self: *Self) !void {
     // TODO: add init code for jumping to the main function
 
     for (self.instructions.items, 0..) |inst, i| {
-        if (inst.tag != .call) continue;
+        if (self.instructions.items[i].tag != .call) continue;
 
-        const loc = self.ast.tokens.items(.loc)[inst.lhs.?.variable];
-        const val = self.ast.source[loc.start..loc.end];
-        const fnc = fns.get(val).?;
+        std.debug.print("CALL: {any}\n", .{inst});
 
-        std.debug.print("CALLING: {s} from {d} to {d}\n", .{ val, i, fnc });
+        var func = fns.get(inst.lhs.?.variable).?;
+        var call = i;
+
+        var is_neg: i64 = 1;
+        std.debug.print("func: {d} | call: {d}\n", .{ func, call });
+
+        if (func < call) {
+            is_neg = -1;
+            const tmp = func;
+            func = call;
+            call = tmp;
+        }
+
+        self.instructions.items[i].lhs = .{ .immediate = 0 };
+
+        var bytes = try Asm.genCode(self.gpa, self.instructions.items[call..func]);
+        const jump = is_neg * @as(i64, @intCast(bytes.items.len));
+        self.instructions.items[i].lhs = .{ .immediate = jump };
+
+        bytes.deinit();
     }
 }
 
@@ -233,7 +261,7 @@ fn genFromStatement(
     self: *Self,
     stmt: usize,
     ctx: *Context,
-    fns: *std.StringHashMap(usize),
+    fns: *std.AutoHashMap(usize, usize),
 ) !void {
     const data = self.ast.nodes.items(.data)[stmt];
 
@@ -301,7 +329,7 @@ fn genFromStatement(
             // NOTE: easiest and safest way to check the offset for the jmp since this will
             // be in the actual exectuable, probably not the most efficient way of doing it
             var bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
-            var jump = bytes.items.len - Asm.sys_exit.len;
+            var jump = bytes.items.len;
             self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(jump);
             bytes.deinit();
 
@@ -337,7 +365,7 @@ fn genFromStatement(
                 try jps.append(self.instructions.items.len);
 
                 bytes = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
-                jump = bytes.items.len - Asm.sys_exit.len;
+                jump = bytes.items.len;
                 self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(jump);
                 bytes.deinit();
             }
@@ -348,7 +376,7 @@ fn genFromStatement(
 
             for (jps.items) |jmp| {
                 bytes = try Asm.genCode(self.gpa, self.instructions.items[jmp..]);
-                jump = bytes.items.len - Asm.sys_exit.len;
+                jump = bytes.items.len;
                 self.instructions.items[jmp - 1].lhs.?.immediate = @intCast(jump);
                 bytes.deinit();
             }
@@ -393,10 +421,10 @@ fn genFromStatement(
 
             const len = self.instructions.items.len;
             const eval = try Asm.genCode(self.gpa, self.instructions.items[size..ptr]);
-            const eval_size = eval.items.len - Asm.sys_exit.len;
+            const eval_size = eval.items.len;
 
             const body = try Asm.genCode(self.gpa, self.instructions.items[ptr..]);
-            const body_size = body.items.len - Asm.sys_exit.len;
+            const body_size = body.items.len;
 
             self.instructions.items[ptr - 1].lhs.?.immediate = @intCast(body_size);
             self.instructions.items[len - 1].lhs.?.immediate = -@as(i64, @intCast(eval_size + body_size));
@@ -421,10 +449,7 @@ fn genFromStatement(
             // try self.funcs.put(f_ident, self.instructions.len);
             const fident = self.ast.nodes.items(.main)[data.lhs];
             const floc = self.ast.tokens.items(.loc)[fident];
-            try fns.put(
-                self.ast.source[floc.start..floc.end],
-                self.instructions.items.len,
-            );
+            try fns.put(stmt, self.instructions.items.len);
 
             std.debug.print("   FUNC: {s}\n", .{self.ast.source[floc.start..floc.end]});
 
@@ -475,9 +500,9 @@ fn genFromStatement(
             try self.instructions.append(.{ .tag = .ret });
         },
         .return_stmt => {
-            if (data.lhs == std.math.maxInt(usize)) {
-                std.debug.print("RET EXPR: {d}\n", .{data.lhs});
+            if (data.lhs != std.math.maxInt(usize)) {
                 try self.genFromExpression(data.lhs, ctx);
+
                 try self.instructions.append(.{
                     .tag = .pop,
                     .lhs = .{ .register = 0 },
@@ -510,7 +535,6 @@ fn genFromStatement(
             const ident = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[ident];
             const val = self.ast.source[loc.start..loc.end];
-            std.debug.print("CALLER: {s}\n", .{val});
 
             const flok = self.ast.func_res.get(val).?;
             const func = self.ast.nodes.items(.data)[flok].rhs;
@@ -536,29 +560,14 @@ fn genFromStatement(
 
             try self.instructions.append(.{
                 .tag = .call,
-                .lhs = .{ .variable = @intCast(ident) },
+                .lhs = .{ .variable = @intCast(flok) },
             });
-
-            if (rett != .invalid) {
-                try self.instructions.append(.{
-                    .tag = .pop,
-                    .lhs = .{ .register = 0 },
-                });
-            }
 
             try self.instructions.append(.{
                 .tag = .add,
                 .lhs = .{ .register = 3 },
                 .rhs = .{ .immediate = offset },
             });
-
-            if (rett != .invalid) {
-                try self.instructions.append(.{
-                    .tag = .push,
-                    .lhs = .{ .register = 0 },
-                });
-                offset -= 8;
-            }
 
             ctx.sp -= @intCast(offset);
         },
@@ -584,7 +593,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
         },
         .ident => {
             const loc = self.ast.tokens.items(.loc)[main];
-
             try ctx.pushVariableOnStack(self, self.ast.source[loc.start..loc.end]);
         },
         .binary_expr => {
@@ -690,7 +698,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             const ident = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[ident];
             const val = self.ast.source[loc.start..loc.end];
-            std.debug.print("CALLER: {s}\n", .{val});
 
             const flok = self.ast.func_res.get(val).?;
             const func = self.ast.nodes.items(.data)[flok].rhs;
@@ -716,7 +723,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
 
             try self.instructions.append(.{
                 .tag = .call,
-                .lhs = .{ .variable = @intCast(ident) },
+                .lhs = .{ .variable = @intCast(flok) },
             });
 
             if (rett != .invalid) {

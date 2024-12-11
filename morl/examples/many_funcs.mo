@@ -1,19 +1,19 @@
-one :: () {
-    a :: 10
-}
+calc :: (n: i32) -> i32 {
+    if n <= 0 {
+        return 0
+    }
 
-two :: () {
-    b :: 20
-}
-
-three :: () {
-    c :: 30
+    return calc(n - 1) + calc(n - 2)
 }
 
 main :: () {
-    a := one()
-    a = two()
-    a = three()
+    res := calc(5)
+
+    $asm(
+        "mov rax, 60",
+        "mov rdi, 0",
+        "syscall"
+    )
 }
 
 

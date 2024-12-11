@@ -11,8 +11,6 @@ const sp: u8 = 0b100;
 const bp: u8 = 0b101;
 const rex_w: u8 = 0x48;
 
-pub const sys_exit = [_]u8{ rex_w, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, 0x0f, 0x05 };
-
 // /r reg and r/m are registers
 pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
     var machine_code = std.ArrayList(u8).init(gpa);
@@ -43,6 +41,7 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
 
             .ret => try machine_code.append(0x3C),
+            .call => try call(item.lhs.?, &machine_code),
             .syscall => try syscall(&machine_code),
             else => {
                 std.debug.print("Tag: {any}\n", .{item.tag});
@@ -51,7 +50,6 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
         }
     }
 
-    try machine_code.appendSlice(&sys_exit);
     return machine_code;
 }
 
@@ -76,6 +74,15 @@ fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     var buf: [4]u8 = undefined;
     std.mem.writeInt(i32, &buf, @intCast(lhs.immediate), .little);
     try buffer.appendSlice(&buf);
+}
+
+// call := FF /2 | ModRM:r/m (r)
+fn call(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .immediate) @panic("ERROR(coge/call): only imm");
+
+    const rbx = 0b011;
+    try mov(.{ .register = rbx }, lhs, buffer);
+    try buffer.appendSlice(&[_]u8{ 0xFF, 0b11010000 | rbx });
 }
 
 fn cmp(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
