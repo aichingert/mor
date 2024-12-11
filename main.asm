@@ -53,7 +53,5 @@ _start:
 
     pop rdi
 
-    mov qword [sp], [sp]
-
     mov rax, 60
     syscall

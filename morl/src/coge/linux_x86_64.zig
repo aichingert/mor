@@ -6,6 +6,7 @@ const Mir = @import("../sema/Mir.zig");
 // ModR/M:
 // Bit 	  76   |   543 	|  210
 // Usage "Mod" |  "Reg" | "R/M"
+
 const sp: u8 = 0b100;
 const bp: u8 = 0b101;
 const rex_w: u8 = 0x48;
@@ -15,8 +16,6 @@ pub const sys_exit = [_]u8{ rex_w, 0xc7, 0xc0, 0x3c, 0x00, 0x00, 0x00, 0x0f, 0x0
 // /r reg and r/m are registers
 pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
     var machine_code = std.ArrayList(u8).init(gpa);
-
-    // TODO: add init code for jumping to the main function
 
     for (instr) |item| {
         switch (item.tag) {
@@ -183,8 +182,8 @@ fn movStkImm(sreg: u8, off: u32, imm: i64, buffer: *std.ArrayList(u8)) !void {
 fn cmov(lhs: Mir.Operand, rhs: Mir.Operand, op: u8, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .register or rhs != .immediate) @panic("ERROR(coge/cmove): invalid branchless reg/imm");
 
-    // NOTE: using register 5 here since 0, 1, ... could be used by the intermediate representation
-    try movRegImm(5, rhs.immediate, buffer);
+    // NOTE: using register 3 here since 0, 1, ... could be used by the intermediate representation
+    try movRegImm(3, rhs.immediate, buffer);
     try buffer.appendSlice(&[_]u8{ rex_w, 0x0F, op, 0b11000101 | (lhs.register << 3) });
 }
 
@@ -238,7 +237,6 @@ fn pushVariable(offset: u32, buffer: *std.ArrayList(u8)) !void {
     // displacement
     var buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &buf, offset, .little);
-
     try buffer.appendSlice(&buf);
 }
 
@@ -277,19 +275,42 @@ fn bit_and(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void
 
 // add := REX.W + 01 /r
 fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(rex_w);
-    try buffer.append(0x01);
-    try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
+    switch (rhs) {
+        .register => {
+            try buffer.append(rex_w);
+            try buffer.append(0x01);
+            try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
+        },
+        .immediate => {
+            const rbx = .{ .register = 3 };
+            try mov(rbx, rhs, buffer);
+            try add(lhs, rbx, buffer);
+        },
+        else => @panic("ERROR(coge/and): only supports reg/reg or reg/imm"),
+    }
 }
 
 // sub := REX.W + 2B /r
 fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.append(rex_w);
-    try buffer.append(0x29);
-    try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
+    var reg = rhs;
+
+    switch (rhs) {
+        .register => {
+            try buffer.append(rex_w);
+            try buffer.append(0x29);
+            try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
+        },
+        .immediate => {
+            const rbx = .{ .register = 3 };
+            reg = rbx;
+            try mov(rbx, rhs, buffer);
+            try sub(lhs, rbx, buffer);
+        },
+        else => @panic("ERROR(coge/sub): only supports reg/reg or reg/imm"),
+    }
 
     // TODO: figure out how to use only one instruction for sub
-    try movRegReg(lhs.register, rhs.register, buffer);
+    try movRegReg(lhs.register, reg.register, buffer);
 }
 
 // TODO: currently not working

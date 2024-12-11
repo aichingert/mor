@@ -189,6 +189,9 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
 pub fn genInstructions(self: *Self) !void {
     self.instructions = std.ArrayList(Instr).init(self.gpa);
 
+    var fns = std.StringHashMap(usize).init(self.gpa);
+    defer fns.deinit();
+
     var ctx: Context = .{
         .rb = 0,
         .sp = 0,
@@ -204,16 +207,34 @@ pub fn genInstructions(self: *Self) !void {
     //    .data = .{ .lhs = node, .rhs = undefined },
     //});
 
-    // TODO: support multiple top level statements
-    // (like other functions and imports)
+    // TODO: support multiple top level statements (like imports)
+
+    std.debug.print("CALLS: {d}\n", .{self.ast.calls.items.len});
 
     for (self.ast.stmts.items) |stmt| {
         std.debug.print("Stmt: {any}\n", .{self.ast.nodes.items(.tag)[stmt]});
-        try self.genFromStatement(stmt, &ctx);
+        try self.genFromStatement(stmt, &ctx, &fns);
+    }
+
+    // TODO: add init code for jumping to the main function
+
+    for (self.instructions.items, 0..) |inst, i| {
+        if (inst.tag != .call) continue;
+
+        const loc = self.ast.tokens.items(.loc)[inst.lhs.?.variable];
+        const val = self.ast.source[loc.start..loc.end];
+        const fnc = fns.get(val).?;
+
+        std.debug.print("CALLING: {s} from {d} to {d}\n", .{ val, i, fnc });
     }
 }
 
-fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
+fn genFromStatement(
+    self: *Self,
+    stmt: usize,
+    ctx: *Context,
+    fns: *std.StringHashMap(usize),
+) !void {
     const data = self.ast.nodes.items(.data)[stmt];
 
     switch (self.ast.nodes.items(.tag)[stmt]) {
@@ -268,7 +289,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             var jps = std.ArrayList(usize).init(self.gpa);
 
             for (cond.if_body.items) |body_stmt| {
-                try self.genFromStatement(body_stmt, ctx);
+                try self.genFromStatement(body_stmt, ctx, fns);
             }
 
             try self.instructions.append(.{
@@ -306,7 +327,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 ptr = self.instructions.items.len;
 
                 for (elif.if_body.items) |body_stmt| {
-                    try self.genFromStatement(body_stmt, ctx);
+                    try self.genFromStatement(body_stmt, ctx, fns);
                 }
 
                 try self.instructions.append(.{
@@ -322,7 +343,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             }
 
             for (cond.el_body.items) |body_stmt| {
-                try self.genFromStatement(body_stmt, ctx);
+                try self.genFromStatement(body_stmt, ctx, fns);
             }
 
             for (jps.items) |jmp| {
@@ -362,18 +383,13 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             const ptr = self.instructions.items.len;
 
             for (loop.body.items) |loop_stmt| {
-                try self.genFromStatement(loop_stmt, ctx);
+                try self.genFromStatement(loop_stmt, ctx, fns);
             }
 
             try self.instructions.append(.{
                 .tag = .jmp,
                 .lhs = .{ .immediate = 0 },
             });
-
-            std.debug.print("{d} {d} -> \n", .{ size, ptr });
-            for (self.instructions.items[size..ptr]) |it| {
-                std.debug.print("{any}\n", .{it});
-            }
 
             const len = self.instructions.items.len;
             const eval = try Asm.genCode(self.gpa, self.instructions.items[size..ptr]);
@@ -403,6 +419,14 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
         .function_declare => {
             // TODO: maybe store function beginnings
             // try self.funcs.put(f_ident, self.instructions.len);
+            const fident = self.ast.nodes.items(.main)[data.lhs];
+            const floc = self.ast.tokens.items(.loc)[fident];
+            try fns.put(
+                self.ast.source[floc.start..floc.end],
+                self.instructions.items.len,
+            );
+
+            std.debug.print("   FUNC: {s}\n", .{self.ast.source[floc.start..floc.end]});
 
             try self.instructions.append(.{
                 .tag = .push,
@@ -420,6 +444,8 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
                 .params = std.StringHashMap(u32).init(self.gpa),
                 .locals = std.StringHashMap(u32).init(self.gpa),
             };
+            defer func_ctx.params.deinit();
+            defer func_ctx.locals.deinit();
 
             for (self.ast.funcs.items(.args)[data.rhs].items) |param| {
                 const tok = self.ast.nodes.items(.data)[param].lhs;
@@ -434,7 +460,7 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
             func_ctx.rb += if (ret_typ != .invalid) 16 else 8;
 
             for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
-                try self.genFromStatement(func_stmt, &func_ctx);
+                try self.genFromStatement(func_stmt, &func_ctx, fns);
             }
 
             try self.instructions.append(.{
@@ -450,6 +476,8 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
         },
         .return_stmt => {
             if (data.lhs == std.math.maxInt(usize)) {
+                std.debug.print("RET EXPR: {d}\n", .{data.lhs});
+                try self.genFromExpression(data.lhs, ctx);
                 try self.instructions.append(.{
                     .tag = .pop,
                     .lhs = .{ .register = 0 },
@@ -478,6 +506,62 @@ fn genFromStatement(self: *Self, stmt: usize, ctx: *Context) !void {
         //      2. calculate relative offset (+/-) to it (including the call instruction)
         //          2.1 if negative two's compliment smth
         //      3. update the offset for the call instruction
+        .call_expr => {
+            const ident = self.ast.nodes.items(.main)[data.lhs];
+            const loc = self.ast.tokens.items(.loc)[ident];
+            const val = self.ast.source[loc.start..loc.end];
+            std.debug.print("CALLER: {s}\n", .{val});
+
+            const flok = self.ast.func_res.get(val).?;
+            const func = self.ast.nodes.items(.data)[flok].rhs;
+            const rett = self.ast.funcs.items(.return_type)[func];
+
+            const call = self.ast.calls.items[data.rhs];
+            var offset: i64 = 0;
+
+            for (call.args.items) |arg| {
+                // NOTE: putting everything on the stack
+                try self.genFromExpression(arg, ctx);
+                offset += 8;
+            }
+
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .sub,
+                    .lhs = .{ .register = 3 },
+                    .rhs = .{ .immediate = 8 },
+                });
+                offset += 8;
+            }
+
+            try self.instructions.append(.{
+                .tag = .call,
+                .lhs = .{ .variable = @intCast(ident) },
+            });
+
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .pop,
+                    .lhs = .{ .register = 0 },
+                });
+            }
+
+            try self.instructions.append(.{
+                .tag = .add,
+                .lhs = .{ .register = 3 },
+                .rhs = .{ .immediate = offset },
+            });
+
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .push,
+                    .lhs = .{ .register = 0 },
+                });
+                offset -= 8;
+            }
+
+            ctx.sp -= @intCast(offset);
+        },
         else => {
             std.debug.print("MISSING IMPL\n", .{});
         },
@@ -602,7 +686,69 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .lhs = .{ .register = 0 },
             });
         },
-        else => {},
+        .call_expr => {
+            const ident = self.ast.nodes.items(.main)[data.lhs];
+            const loc = self.ast.tokens.items(.loc)[ident];
+            const val = self.ast.source[loc.start..loc.end];
+            std.debug.print("CALLER: {s}\n", .{val});
+
+            const flok = self.ast.func_res.get(val).?;
+            const func = self.ast.nodes.items(.data)[flok].rhs;
+            const rett = self.ast.funcs.items(.return_type)[func];
+
+            const call = self.ast.calls.items[data.rhs];
+            var offset: i64 = 0;
+
+            for (call.args.items) |arg| {
+                // NOTE: putting everything on the stack
+                try self.genFromExpression(arg, ctx);
+                offset += 8;
+            }
+
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .sub,
+                    .lhs = .{ .register = 3 },
+                    .rhs = .{ .immediate = 8 },
+                });
+                offset += 8;
+            }
+
+            try self.instructions.append(.{
+                .tag = .call,
+                .lhs = .{ .variable = @intCast(ident) },
+            });
+
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .pop,
+                    .lhs = .{ .register = 0 },
+                });
+            }
+
+            try self.instructions.append(.{
+                .tag = .add,
+                .lhs = .{ .register = 3 },
+                .rhs = .{ .immediate = offset },
+            });
+
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .push,
+                    .lhs = .{ .register = 0 },
+                });
+                offset -= 8;
+            }
+
+            ctx.sp -= @intCast(offset);
+        },
+        else => {
+            std.debug.print(
+                "TODO: not implement expr {any}",
+                .{self.ast.nodes.items(.tag)[expr]},
+            );
+            std.process.exit(1);
+        },
     }
 }
 
