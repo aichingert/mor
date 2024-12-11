@@ -140,8 +140,8 @@ fn movStk(sreg: u8, off: u32, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !voi
         @panic("ERROR(compiler): cannot mov value from memory to memory");
 
     switch (rhs) {
-        .register => try movRegStk(rhs.register, sreg, off, buffer),
-        .immediate => try movStkImm(sreg, off, rhs.immediate, buffer),
+        .register => try movStkReg(sreg, rhs.register, off, buffer),
+        .immediate => try movStkImm(sreg, rhs.immediate, off, buffer),
         else => @panic("unreachable"),
     }
 }
@@ -149,7 +149,8 @@ fn movStk(sreg: u8, off: u32, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !voi
 // mov: REX.W + 8B /r | (r64, r/m64)
 fn movRegStk(reg: u8, sreg: u8, off: u32, buffer: *std.ArrayList(u8)) !void {
     // 0x24 => SIB - byte
-    try buffer.appendSlice(&[_]u8{ rex_w, 0x8B, 0b10000000 | reg << 3 | sreg, 0x24 });
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x8B, 0b10000000 | reg << 3 | sreg });
+    if (sreg == sp) try buffer.append(0x24);
 
     var buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &buf, off, .little);
@@ -170,12 +171,22 @@ fn movRegImm(reg: u8, imm: i64, buffer: *std.ArrayList(u8)) !void {
     try buffer.appendSlice(&buf);
 }
 
-fn movStkImm(sreg: u8, off: u32, imm: i64, buffer: *std.ArrayList(u8)) !void {
+// mov: REX.W + 89 /r | (r/m64, r64)
+fn movStkReg(sreg: u8, reg: u8, off: u32, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x89, 0b10000000 | reg << 3 | sreg });
+    if (sreg == sp) try buffer.append(0x24);
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, off, .little);
+    try buffer.appendSlice(&buf);
+}
+
+fn movStkImm(sreg: u8, imm: i64, off: u32, buffer: *std.ArrayList(u8)) !void {
     // rbx -> since it is most likely not used...
     const rbx: u8 = 0b010;
 
     try movRegImm(rbx, imm, buffer);
-    try movRegStk(rbx, sreg, off, buffer);
+    try movStkReg(rbx, sreg, off, buffer);
 }
 
 // cmov: REX.W + 0F __ /r | (r64, r/m64)
@@ -292,25 +303,29 @@ fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
 // sub := REX.W + 2B /r
 fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    var reg = rhs;
-
     switch (rhs) {
         .register => {
+            std.debug.print("SUB: {any} | {any} \n", .{ lhs, rhs });
+
             try buffer.append(rex_w);
             try buffer.append(0x29);
             try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
         },
         .immediate => {
             const rbx = .{ .register = 3 };
-            reg = rbx;
+
             try mov(rbx, rhs, buffer);
-            try sub(lhs, rbx, buffer);
+
+            try buffer.append(rex_w);
+            try buffer.append(0x29);
+            try buffer.append(0b11000000 | (lhs.register << 3) | rbx.register);
+            return;
         },
         else => @panic("ERROR(coge/sub): only supports reg/reg or reg/imm"),
     }
 
     // TODO: figure out how to use only one instruction for sub
-    try movRegReg(lhs.register, reg.register, buffer);
+    try movRegReg(lhs.register, rhs.register, buffer);
 }
 
 // TODO: currently not working

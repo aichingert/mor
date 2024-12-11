@@ -16,13 +16,13 @@ ast: Ast,
 gpa: std.mem.Allocator,
 instructions: std.ArrayList(Instr),
 
-// TODO: remove rb since it is only used for
+// TODO: remove bp since it is only used for
 // arguments and does not change within the func
 // also should only have one StringHashMap with
 // a struct containing information if it is a
 // local variable or argument
 const Context = struct {
-    rb: u32,
+    bp: u32,
     sp: u32,
     params: std.StringHashMap(u32),
     locals: std.StringHashMap(u32),
@@ -39,7 +39,7 @@ const Context = struct {
         if (self.params.get(ident)) |param| {
             try mir.instructions.append(.{
                 .tag = .push,
-                .lhs = .{ .parameter = self.rb - param },
+                .lhs = .{ .parameter = self.bp - param },
             });
             return;
         }
@@ -96,11 +96,11 @@ pub const Operand = union(enum) {
             return .{ .register = 0b001 };
         } else if (std.mem.eql(u8, ident, "rdx")) {
             return .{ .register = 0b010 };
-        } else if (std.mem.eql(u8, ident, "rbx")) {
+        } else if (std.mem.eql(u8, ident, "bpx")) {
             return .{ .register = 0b011 };
         } else if (std.mem.eql(u8, ident, "rsp")) {
             return .{ .register = 0b100 };
-        } else if (std.mem.eql(u8, ident, "rbp")) {
+        } else if (std.mem.eql(u8, ident, "bpp")) {
             return .{ .register = 0b101 };
         } else if (std.mem.eql(u8, ident, "rsi")) {
             return .{ .register = 0b110 };
@@ -193,7 +193,7 @@ pub fn genInstructions(self: *Self) !void {
     defer fns.deinit();
 
     var ctx: Context = .{
-        .rb = 0,
+        .bp = 0,
         .sp = 0,
         .params = std.StringHashMap(u32).init(self.gpa),
         .locals = std.StringHashMap(u32).init(self.gpa),
@@ -220,8 +220,6 @@ pub fn genInstructions(self: *Self) !void {
     });
     try self.instructions.append(.{ .tag = .syscall });
 
-    std.debug.print("CALLS: {d}\n", .{self.ast.calls.items.len});
-
     for (self.ast.stmts.items) |stmt| {
         std.debug.print("Stmt: {any}\n", .{self.ast.nodes.items(.tag)[stmt]});
         try self.genFromStatement(stmt, &ctx, &fns);
@@ -231,14 +229,10 @@ pub fn genInstructions(self: *Self) !void {
 
     for (self.instructions.items, 0..) |inst, i| {
         if (self.instructions.items[i].tag != .call) continue;
-
-        std.debug.print("CALL: {any}\n", .{inst});
-
         var func = fns.get(inst.lhs.?.variable).?;
         var call = i + 1;
 
         var is_neg: i64 = 1;
-        std.debug.print("func: {d} | call: {d}\n", .{ func, call });
 
         if (func < call) {
             is_neg = -1;
@@ -248,10 +242,6 @@ pub fn genInstructions(self: *Self) !void {
         }
 
         self.instructions.items[i].lhs = .{ .immediate = 0 };
-
-        for (self.instructions.items[call..func]) |gen| {
-            std.debug.print("GEN: {any}\n", .{gen.tag});
-        }
 
         var bytes = try Asm.genCode(self.gpa, self.instructions.items[call..func]);
         const jump = is_neg * @as(i64, @intCast(bytes.items.len));
@@ -387,6 +377,11 @@ fn genFromStatement(
 
             jps.deinit();
         },
+        // TODO: have to create new scope within
+        // because if a new variable does not get
+        // deleted in the function the stack ptr
+        // will get offsetet and all indexes will
+        // be broken!
         .while_expr => {
             // cmp cond
             // je 0
@@ -468,7 +463,7 @@ fn genFromStatement(
             });
 
             var func_ctx: Context = .{
-                .rb = 0,
+                .bp = 0,
                 .sp = 0,
                 .params = std.StringHashMap(u32).init(self.gpa),
                 .locals = std.StringHashMap(u32).init(self.gpa),
@@ -481,12 +476,12 @@ fn genFromStatement(
                 const loc = self.ast.tokens.items(.loc)[tok];
                 const val = self.ast.source[loc.start..loc.end];
 
-                func_ctx.rb += 8;
-                try func_ctx.params.put(val, func_ctx.rb);
+                try func_ctx.params.put(val, func_ctx.bp);
+                func_ctx.bp += 8;
             }
 
             const ret_typ = self.ast.funcs.items(.return_type)[data.rhs];
-            func_ctx.rb += if (ret_typ != .invalid) 16 else 8;
+            func_ctx.bp += if (ret_typ != .invalid) 16 else 8;
 
             for (self.ast.funcs.items(.body)[data.rhs].items) |func_stmt| {
                 try self.genFromStatement(func_stmt, &func_ctx, fns);
@@ -796,13 +791,21 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
             }
 
             if (instr.rhs == null) {
+                std.debug.print("RHS: {s}\n", .{rhs});
                 const res = std.fmt.parseInt(i64, rhs, 10);
 
                 if (res == error.InvalidCharacter) {
-                    const value = ctx.locals.get(rhs);
-                    if (value == null) @panic("ERROR: variable is not defined lhs");
+                    const sp = ctx.locals.get(rhs);
 
-                    instr.rhs = .{ .variable = ctx.sp - value.? };
+                    if (sp == null) {
+                        const bp = ctx.params.get(rhs);
+
+                        if (bp == null) @panic("ERROR: variable is not defined rhs");
+
+                        instr.rhs = .{ .parameter = ctx.bp - bp.? };
+                    } else {
+                        instr.rhs = .{ .variable = ctx.sp - sp.? };
+                    }
                 } else {
                     instr.rhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
                 }
