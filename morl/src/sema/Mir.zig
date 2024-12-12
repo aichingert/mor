@@ -206,7 +206,7 @@ pub fn genInstructions(self: *Self) !void {
     // Entry point:
     try self.instructions.append(.{
         .tag = .call,
-        .lhs = .{ .variable = @intCast(self.ast.func_res.get("main").?) },
+        .lhs = .{ .immediate = @intCast(self.ast.func_res.get("main").?) },
     });
     try self.instructions.append(.{
         .tag = .mov,
@@ -229,7 +229,7 @@ pub fn genInstructions(self: *Self) !void {
 
     for (self.instructions.items, 0..) |inst, i| {
         if (self.instructions.items[i].tag != .call) continue;
-        var func = fns.get(inst.lhs.?.variable).?;
+        var func = fns.get(@intCast(inst.lhs.?.immediate)).?;
         var call = i + 1;
 
         var is_neg: i64 = 1;
@@ -240,8 +240,6 @@ pub fn genInstructions(self: *Self) !void {
             func = call;
             call = tmp;
         }
-
-        self.instructions.items[i].lhs = .{ .immediate = 0 };
 
         var bytes = try Asm.genCode(self.gpa, self.instructions.items[call..func]);
         const jump = is_neg * @as(i64, @intCast(bytes.items.len));
@@ -500,7 +498,13 @@ fn genFromStatement(
         },
         .return_stmt => {
             if (data.lhs != std.math.maxInt(usize)) {
+                const idx = self.instructions.items.len;
+                std.debug.print("RET: {any}\n", .{data.lhs});
+
                 try self.genFromExpression(data.lhs, ctx);
+                for (self.instructions.items[idx..]) |ins| {
+                    std.debug.print("RET: {any}\n", .{ins});
+                }
 
                 try self.instructions.append(.{
                     .tag = .pop,
@@ -559,7 +563,7 @@ fn genFromStatement(
 
             try self.instructions.append(.{
                 .tag = .call,
-                .lhs = .{ .variable = @intCast(flok) },
+                .lhs = .{ .immediate = @intCast(flok) },
             });
 
             try self.instructions.append(.{
@@ -714,15 +718,14 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             if (rett != .invalid) {
                 try self.instructions.append(.{
                     .tag = .sub,
-                    .lhs = .{ .register = 3 },
+                    .lhs = .{ .register = 4 },
                     .rhs = .{ .immediate = 8 },
                 });
-                offset += 8;
             }
 
             try self.instructions.append(.{
                 .tag = .call,
-                .lhs = .{ .variable = @intCast(flok) },
+                .lhs = .{ .immediate = @intCast(flok) },
             });
 
             if (rett != .invalid) {
@@ -734,7 +737,7 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
 
             try self.instructions.append(.{
                 .tag = .add,
-                .lhs = .{ .register = 3 },
+                .lhs = .{ .register = 4 },
                 .rhs = .{ .immediate = offset },
             });
 
@@ -743,10 +746,9 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                     .tag = .push,
                     .lhs = .{ .register = 0 },
                 });
-                offset -= 8;
             }
 
-            ctx.sp -= @intCast(offset);
+            ctx.sp += 8;
         },
         else => {
             std.debug.print(

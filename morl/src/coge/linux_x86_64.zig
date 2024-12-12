@@ -38,7 +38,7 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
 
             .add => try add(item.lhs.?, item.rhs.?, &machine_code),
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
-            .mul => try sub(item.lhs.?, item.rhs.?, &machine_code),
+            .mul => try mul(item.lhs.?, item.rhs.?, &machine_code),
 
             .ret => try machine_code.append(0xC3),
             .call => try call(item.lhs.?, &machine_code),
@@ -222,30 +222,17 @@ fn push(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
             try movRegImm(0, lhs.immediate, buffer);
             try buffer.append(0x50);
         },
-        .variable => try pushVariable(lhs.variable, buffer),
-        .parameter => {},
+        .variable => try pushVariable(sp, lhs.variable, buffer),
+        .parameter => try pushVariable(bp, lhs.parameter, buffer),
         .register => try buffer.append(0x50 + lhs.register),
     }
 }
 
-fn pushVariable(offset: u32, buffer: *std.ArrayList(u8)) !void {
-    // FF /6
-    try buffer.append(0xFF);
+// push: FF /6 | (r/m64)
+fn pushVariable(sreg: u8, offset: u32, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ 0xFF, 0b10110000 | sreg });
+    if (sreg == sp) try buffer.append(0x24);
 
-    // 0xB4 => 16 * 11 + 4 => 180
-    // => 10110100
-
-    // https://wiki.osdev.org/X86-64_Instruction_Encoding
-    // MOD REG R/M
-    // 10  110 100
-    try buffer.append(0xB4);
-
-    // SIB
-    // 36 => 0x2
-    // 00 100 100 => Mod 10 => X.Index = 0.100 SP | B.Base => SP
-    try buffer.append(0x24);
-
-    // displacement
     var buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &buf, offset, .little);
     try buffer.appendSlice(&buf);
@@ -318,7 +305,7 @@ fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
             try buffer.append(rex_w);
             try buffer.append(0x29);
-            try buffer.append(0b11000000 | (lhs.register << 3) | rbx.register);
+            try buffer.append(0b11000000 | (rbx.register << 3) | lhs.register);
             return;
         },
         else => @panic("ERROR(coge/sub): only supports reg/reg or reg/imm"),
@@ -338,7 +325,7 @@ fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try buffer.append(0xF7);
     try buffer.append(0b11100000 | rhs.register);
 
-    try movRegReg(0, 7, buffer);
+    //try movRegReg(0, 7, buffer);
 }
 
 fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {

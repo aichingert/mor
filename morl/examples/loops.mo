@@ -3,7 +3,7 @@ main :: () {
     b : i32 = 0
     c : i32 = 0
 
-    i : i32 = 8
+    i : i32 = 7
 
     while i {
         c = a + b

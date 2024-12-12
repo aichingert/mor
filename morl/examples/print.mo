@@ -7,13 +7,7 @@ print_num :: (n: i32) {
 }
 
 main :: () {
-    n := 50 + 50
-
-    $asm(
-        "mov rax, 60",
-        "mov rdi, n",
-        "syscall"
-    )
+    n :=5*3 
 
     print_num(n)
 }
