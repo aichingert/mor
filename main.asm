@@ -4,6 +4,7 @@ global _start
 
 _start:
     push qword 1
+    push rbx, 2
     call print_num
     mov rbx, 2
 

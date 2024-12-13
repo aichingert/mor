@@ -48,6 +48,18 @@ const Context = struct {
         std.process.exit(1);
     }
 
+    fn getVariableOperand(self: *Context, ident: []const u8) Operand {
+        if (self.locals.get(ident)) |local| {
+            return .{ .variable = self.sp - local };
+        }
+        if (self.params.get(ident)) |param| {
+            return .{ .parameter = self.bp - param };
+        }
+
+        std.debug.print("Error: use of unknown var [{s}]\n", .{ident});
+        std.process.exit(1);
+    }
+
     fn setVariableFromStack(self: *Context, mir: *Self, ident: []const u8) !void {
         try mir.instructions.append(.{
             .tag = .pop,
@@ -129,6 +141,7 @@ pub const Instr = struct {
         bit_or,
         bit_and,
 
+        lea,
         mov,
         cmove,
         cmovne,
@@ -712,6 +725,8 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
             for (call.args.items) |arg| {
                 // NOTE: putting everything on the stack
                 try self.genFromExpression(arg, ctx);
+
+                ctx.sp -= 8;
                 offset += 8;
             }
 
@@ -747,8 +762,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                     .lhs = .{ .register = 0 },
                 });
             }
-
-            ctx.sp += 8;
         },
         else => {
             std.debug.print(
@@ -770,54 +783,41 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
         var it = std.mem.split(u8, val, " ");
         const op = it.next().?;
 
+        var instr: Instr = .{ .tag = .mov };
+
         if (std.mem.eql(u8, op, "mov")) {
-            var instr: Instr = .{ .tag = .mov };
-
-            const lhs = it.next().?;
-            const rhs = it.next().?;
-
-            instr.lhs = Operand.registerFromIdent(lhs[0 .. lhs.len - 1]);
-            instr.rhs = Operand.registerFromIdent(rhs);
-
-            if (instr.lhs == null) {
-                const res = std.fmt.parseInt(i64, lhs[0 .. lhs.len - 1], 10);
-
-                if (res == error.InvalidCharacter) {
-                    const value = ctx.locals.get(lhs[0 .. lhs.len - 1]);
-                    if (value == null) @panic("ERROR: variable is not defined lhs");
-
-                    instr.lhs = .{ .variable = ctx.sp - value.? };
-                } else {
-                    instr.lhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
-                }
-            }
-
-            if (instr.rhs == null) {
-                std.debug.print("RHS: {s}\n", .{rhs});
-                const res = std.fmt.parseInt(i64, rhs, 10);
-
-                if (res == error.InvalidCharacter) {
-                    const sp = ctx.locals.get(rhs);
-
-                    if (sp == null) {
-                        const bp = ctx.params.get(rhs);
-
-                        if (bp == null) @panic("ERROR: variable is not defined rhs");
-
-                        instr.rhs = .{ .parameter = ctx.bp - bp.? };
-                    } else {
-                        instr.rhs = .{ .variable = ctx.sp - sp.? };
-                    }
-                } else {
-                    instr.rhs = .{ .immediate = res catch @panic("ERROR: number overflows") };
-                }
-            }
-
-            try self.instructions.append(instr);
+            instr.tag = .mov;
+            instr.lhs = parseOperand(ctx, it.next().?, true, false);
+            instr.rhs = parseOperand(ctx, it.next().?, true, true);
+        } else if (std.mem.eql(u8, op, "lea")) {
+            instr.tag = .lea;
+            instr.lhs = parseOperand(ctx, it.next().?, true, false);
+            instr.rhs = parseOperand(ctx, it.next().?, true, false);
         } else if (std.mem.eql(u8, op, "syscall")) {
-            try self.instructions.append(.{ .tag = .syscall });
-        } else {}
+            instr.tag = .syscall;
+        } else {
+            std.debug.print("Error(mir/asm): asm instruction[{s} not implemented", .{op});
+            std.process.exit(1);
+        }
+
+        try self.instructions.append(instr);
     }
+}
+
+fn parseOperand(ctx: *Context, ident: []const u8, is_lhs: bool, parseable: bool) Operand {
+    const off: usize = if (is_lhs) 1 else 0;
+
+    if (Operand.registerFromIdent(ident[0 .. ident.len - off])) |reg| {
+        return reg;
+    }
+
+    if (!parseable) return ctx.getVariableOperand(ident);
+
+    const number = std.fmt.parseInt(i64, ident, 10) catch {
+        return ctx.getVariableOperand(ident);
+    };
+
+    return .{ .immediate = number };
 }
 
 pub fn printInstrs(self: *Self) void {

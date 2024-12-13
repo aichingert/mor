@@ -1,18 +1,16 @@
-
-fn :: (n: i32) -> i32 {
-    if n <= 1 {
-        return n
-    }
-
-    return fn(n - 1) + fn(n - 2)
+add :: (a: i32, b: i32) -> i32 {
+    return a + b
 }
 
 main :: () {
-    a := fn(9)
+    prv := 1
+    twc := 2
+    trc := 3
+    sum := add(9, 8)
 
     $asm(
         "mov rax, 60",
-        "mov rdi, a",
+        "mov rdi, twc",
         "syscall"
     )
 }

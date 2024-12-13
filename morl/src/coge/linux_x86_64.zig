@@ -21,6 +21,7 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .cmp => try cmp(item.lhs.?, item.rhs.?, &machine_code),
             .jmp => try jmp(item.lhs.?, &machine_code),
 
+            .lea => try lea(item.lhs.?, item.rhs.?, &machine_code),
             .mov => try mov(item.lhs.?, item.rhs.?, &machine_code),
             .cmove => try cmov(item.lhs.?, item.rhs.?, 0x44, &machine_code),
             .cmovg => try cmov(item.lhs.?, item.rhs.?, 0x4F, &machine_code),
@@ -73,6 +74,17 @@ fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
     var buf: [4]u8 = undefined;
     std.mem.writeInt(i32, &buf, @intCast(lhs.immediate), .little);
+    try buffer.appendSlice(&buf);
+}
+
+// TODO: hard coded for testing purposes
+fn lea(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x8D, 0b10000000 | lhs.register << 3 | bp });
+
+    const off = rhs.parameter;
+
+    var buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &buf, off, .little);
     try buffer.appendSlice(&buf);
 }
 

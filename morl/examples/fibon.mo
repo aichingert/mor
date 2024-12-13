@@ -21,7 +21,7 @@ main :: () {
         i = i - 1
     }
 
-    n := fib(7)
+    n := fib(5)
 
     $asm(
         "mov rax, 60",
