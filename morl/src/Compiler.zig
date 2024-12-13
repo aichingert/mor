@@ -20,7 +20,5 @@ pub fn compile(path: []const u8, allocator: std.mem.Allocator) !void {
     try mir.genInstructions();
     defer mir.instructions.deinit();
 
-    mir.printInstrs();
-
     try Elf.genExe(allocator, mir);
 }

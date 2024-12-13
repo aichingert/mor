@@ -327,7 +327,6 @@ fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     try movRegReg(lhs.register, rhs.register, buffer);
 }
 
-// TODO: currently not working
 // mul := REX.W + F7 /4
 fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs != .register and lhs.register != 0) @panic("ERROR(coge/mul): lhs is not rax");

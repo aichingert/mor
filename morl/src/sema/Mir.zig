@@ -27,6 +27,15 @@ const Context = struct {
     params: std.StringHashMap(u32),
     locals: std.StringHashMap(u32),
 
+    fn clone(self: *Context) !Context {
+        return .{
+            .bp = self.bp,
+            .sp = self.sp,
+            .params = try self.params.clone(),
+            .locals = try self.locals.clone(),
+        };
+    }
+
     fn pushVariableOnStack(self: *Context, mir: *Self, ident: []const u8) !void {
         if (self.locals.get(ident)) |local| {
             try mir.instructions.append(.{
@@ -286,6 +295,11 @@ fn genFromStatement(
             try self.genFromExpression(data.rhs, ctx);
             try ctx.setVariableFromStack(self, self.ast.source[loc.start..loc.end]);
         },
+        // TODO: have to create new scope within
+        // because if a new variable does not get
+        // deleted in the function the stack ptr
+        // will get offsetet and all indexes will
+        // be broken!
         .if_expr => {
             // cmp cond-1
             // je .blk -1
@@ -388,11 +402,6 @@ fn genFromStatement(
 
             jps.deinit();
         },
-        // TODO: have to create new scope within
-        // because if a new variable does not get
-        // deleted in the function the stack ptr
-        // will get offsetet and all indexes will
-        // be broken!
         .while_expr => {
             // cmp cond
             // je 0
@@ -420,9 +429,23 @@ fn genFromStatement(
             });
             const ptr = self.instructions.items.len;
 
+            var while_ctx = try ctx.clone();
+
             for (loop.body.items) |loop_stmt| {
-                try self.genFromStatement(loop_stmt, ctx, fns);
+                try self.genFromStatement(loop_stmt, &while_ctx, fns);
             }
+
+            var iter = while_ctx.locals.iterator();
+            while (iter.next()) |kv| {
+                if (ctx.locals.contains(kv.key_ptr.*)) {
+                    try ctx.locals.put(kv.key_ptr.*, kv.value_ptr.*);
+                } else {
+                    try self.instructions.append(.{ .tag = .pop, .lhs = .{ .register = 0 } });
+                }
+            }
+
+            while_ctx.params.deinit();
+            while_ctx.locals.deinit();
 
             try self.instructions.append(.{
                 .tag = .jmp,
@@ -818,28 +841,4 @@ fn parseOperand(ctx: *Context, ident: []const u8, is_lhs: bool, parseable: bool)
     };
 
     return .{ .immediate = number };
-}
-
-pub fn printInstrs(self: *Self) void {
-    for (self.instructions.items) |item| {
-        std.debug.print("{s} ", .{std.enums.tagName(Instr.Tag, item.tag).?});
-
-        switch (item.tag) {
-            .neg => {
-                std.debug.print("-", .{});
-                item.lhs.?.print();
-            },
-            .pop, .push => {
-                item.lhs.?.print();
-            },
-            .add, .sub, .mul, .div => {
-                item.lhs.?.print();
-                std.debug.print(", ", .{});
-                item.rhs.?.print();
-            },
-            else => {},
-        }
-
-        std.debug.print("\n", .{});
-    }
 }

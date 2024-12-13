@@ -13,9 +13,17 @@ main :: () {
         i = i - 1
     }
 
+    d : i32 = 20
+    e : i32 = 10
+
+    while d >= e {
+        t := 2
+        e = e * t
+    }
+
     $asm(
         "mov rax, 60",
-        "mov rdi, a",
+        "mov rdi, e",
         "syscall"
     )
 }
