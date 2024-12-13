@@ -3,14 +3,29 @@ section .text
 global _start
 
 _start:
-    push qword 1
-    push rbx, 2
-    call print_num
-    mov rbx, 2
+    ; push qword 0x1
 
-print_num:
+    ; push rbp
+    ; mov rbp, rsp
+
+    ; push qword 0x31
+    ; push qword 0
+
+    ; sub rsp, 0x10
+    ; mov qword [rsp + 0x10], 0x32
+
+    push qword 0x32
+    push qword 0
+
+    lea rsi, [rsp + 8]
+
+    mov rax, 1
+    mov rdi, 1
+    mov rdx, 8
+    syscall
+
     mov rax, 60
-    mov rdi, 0
+    mov rdi, [rsp + 8]
     syscall
     ret
 

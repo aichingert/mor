@@ -541,12 +541,6 @@ fn genFromStatement(
             });
             try self.instructions.append(.{ .tag = .ret });
         },
-        // TODO: call expression, find offets to the function
-        // it is calling e.g. func_a:
-        //      1. search function declare
-        //      2. calculate relative offset (+/-) to it (including the call instruction)
-        //          2.1 if negative two's compliment smth
-        //      3. update the offset for the call instruction
         .call_expr => {
             const ident = self.ast.nodes.items(.main)[data.lhs];
             const loc = self.ast.tokens.items(.loc)[ident];
@@ -562,13 +556,15 @@ fn genFromStatement(
             for (call.args.items) |arg| {
                 // NOTE: putting everything on the stack
                 try self.genFromExpression(arg, ctx);
+
                 offset += 8;
+                ctx.sp -= 8;
             }
 
             if (rett != .invalid) {
                 try self.instructions.append(.{
                     .tag = .sub,
-                    .lhs = .{ .register = 3 },
+                    .lhs = .{ .register = 4 },
                     .rhs = .{ .immediate = 8 },
                 });
                 offset += 8;
@@ -579,13 +575,17 @@ fn genFromStatement(
                 .lhs = .{ .immediate = @intCast(flok) },
             });
 
+            if (rett != .invalid) {
+                try self.instructions.append(.{
+                    .tag = .pop,
+                    .lhs = .{ .register = 0 },
+                });
+            }
             try self.instructions.append(.{
                 .tag = .add,
-                .lhs = .{ .register = 3 },
+                .lhs = .{ .register = 4 },
                 .rhs = .{ .immediate = offset },
             });
-
-            ctx.sp -= @intCast(offset);
         },
         else => {
             std.debug.print("MISSING IMPL\n", .{});
@@ -788,11 +788,11 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
         if (std.mem.eql(u8, op, "mov")) {
             instr.tag = .mov;
             instr.lhs = parseOperand(ctx, it.next().?, true, false);
-            instr.rhs = parseOperand(ctx, it.next().?, true, true);
+            instr.rhs = parseOperand(ctx, it.next().?, false, true);
         } else if (std.mem.eql(u8, op, "lea")) {
             instr.tag = .lea;
             instr.lhs = parseOperand(ctx, it.next().?, true, false);
-            instr.rhs = parseOperand(ctx, it.next().?, true, false);
+            instr.rhs = parseOperand(ctx, it.next().?, false, false);
         } else if (std.mem.eql(u8, op, "syscall")) {
             instr.tag = .syscall;
         } else {
