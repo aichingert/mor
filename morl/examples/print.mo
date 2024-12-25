@@ -14,6 +14,7 @@ main :: () {
     print_num(n)
     print_num(n + 1)
     print_num(n + 2)
+    print_num(10)
 }
 
 

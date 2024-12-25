@@ -1,3 +1,3 @@
 #!/bin/sh
 
-ndisasm -b64 bin
+ndisasm -ab64 bin

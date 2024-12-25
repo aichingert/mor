@@ -190,6 +190,10 @@ pub const Lexer = struct {
                 ',' => self.genToken(.comma, result.loc.start),
                 '(' => self.genToken(.lparen, result.loc.start),
                 ')' => self.genToken(.rparen, result.loc.start),
+                // credits: @Austromo <3
+                // late night session :)
+                '[' => self.genToken(.lbracket, result.loc.start),
+                ']' => self.genToken(.rbracket, result.loc.start),
                 '{' => self.genToken(.lbrace, result.loc.start),
                 '}' => self.genToken(.rbrace, result.loc.start),
                 '$' => self.genToken(.dollar, result.loc.start),

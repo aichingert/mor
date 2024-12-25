@@ -3,6 +3,30 @@ section .text
 global _start
 
 _start:
+    push qword 0x1
+    push qword 0x2
+    push qword 0x3
+
+    mov rax, 2
+    mov rcx, 8
+    mul rcx
+
+    mov rdx, rsp
+    add rsp, rax
+
+    ;mov rax, 2
+    ;mov rcx, 8
+    ;mul rcx
+
+    ;lea rdi, [rsp]
+    ;add rdi, rax
+    ;push qword [rdi]
+    ;pop rbx
+
+    mov rax, 60
+    mov rdi, [rsp]
+    syscall
+
     ; push qword 0x1
 
     ; push rbp
@@ -14,20 +38,19 @@ _start:
     ; sub rsp, 0x10
     ; mov qword [rsp + 0x10], 0x32
 
-    push qword 0x32
-    push qword 0
+    ; push qword 0x32
+    ; push qword 0
 
-    lea rsi, [rsp + 8]
+    ; lea rsi, [rsp + 8]
 
-    mov rax, 1
-    mov rdi, 1
-    mov rdx, 8
-    syscall
+    ; mov rax, 1
+    ; mov rdi, 1
+    ; mov rdx, 8
+    ; syscall
 
-    mov rax, 60
-    mov rdi, [rsp + 8]
-    syscall
-    ret
+    ; mov rax, 60
+    ; mov rdi, 0
+    ; syscall
 
 ;; section .text
 ;; 

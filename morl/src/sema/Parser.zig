@@ -17,6 +17,7 @@ calls: std.ArrayList(Ast.Call),
 conds: std.ArrayList(Ast.Cond),
 loops: std.ArrayList(Ast.Loop),
 stmts: std.ArrayList(usize),
+arras: std.ArrayList(Ast.Array),
 func_res: std.StringHashMap(usize),
 
 pub fn init(
@@ -34,6 +35,7 @@ pub fn init(
         .conds = std.ArrayList(Ast.Cond).init(gpa),
         .loops = std.ArrayList(Ast.Loop).init(gpa),
         .calls = std.ArrayList(Ast.Call).init(gpa),
+        .arras = std.ArrayList(Ast.Array).init(gpa),
         .nodes = Ast.NodeList{},
         .funcs = Ast.FuncList{},
         .func_res = std.StringHashMap(usize).init(gpa),
@@ -94,6 +96,11 @@ fn addLoop(self: *Self, loop: Ast.Loop) std.mem.Allocator.Error!usize {
     return self.loops.items.len - 1;
 }
 
+fn addArray(self: *Self, array: Ast.Array) std.mem.Allocator.Error!usize {
+    try self.arras.append(array);
+    return self.arras.items.len - 1;
+}
+
 pub fn parse(self: *Self) std.mem.Allocator.Error!void {
     while (self.peekTag() != .eof) {
         var res: usize = std.math.maxInt(usize);
@@ -127,7 +134,7 @@ fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
 
     const expr = try self.parseExpr(0);
     self.expectNext(.lbrace);
-    const body = try self.parseFuncBody();
+    const body = try self.parseBody();
     var elif_ex = std.ArrayList(usize).init(self.gpa);
     var el_body = std.ArrayList(usize).init(self.gpa);
 
@@ -135,7 +142,7 @@ fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
         self.expectNext(.kw_elif);
         const elif_expr = try self.parseExpr(0);
         self.expectNext(.lbrace);
-        const elif_body = try self.parseFuncBody();
+        const elif_body = try self.parseBody();
 
         try elif_ex.append(try self.addCond(.{
             .if_cond = elif_expr,
@@ -150,7 +157,7 @@ fn parseCondition(self: *Self) std.mem.Allocator.Error!usize {
         self.expectNext(.lbrace);
 
         el_body.deinit();
-        el_body = try self.parseFuncBody();
+        el_body = try self.parseBody();
     }
 
     return self.addNode(.{
@@ -174,7 +181,7 @@ fn parseWhile(self: *Self) std.mem.Allocator.Error!usize {
     const cond = try self.parseExpr(0);
 
     self.expectNext(.lbrace);
-    const body = try self.parseFuncBody();
+    const body = try self.parseBody();
 
     return self.addNode(.{
         .tag = .while_expr,
@@ -323,7 +330,7 @@ fn parseFunc(self: *Self) !usize {
         self.expectNext(.lbrace);
     }
 
-    const body = try self.parseFuncBody();
+    const body = try self.parseBody();
 
     return self.addNode(.{
         .tag = .function_declare,
@@ -339,7 +346,28 @@ fn parseFunc(self: *Self) !usize {
     });
 }
 
-fn parseFuncBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
+fn parseArray(self: *Self) !usize {
+    self.expectNext(.lbracket);
+
+    var array: Ast.Array = .{
+        .elements = std.ArrayList(usize).init(self.gpa),
+    };
+
+    while (self.peekTag() != .eof) {
+        try array.elements.append(try self.parseExpr(0));
+
+        if (self.peekTag() == .comma) {
+            self.expectNext(.comma);
+        } else {
+            break;
+        }
+    }
+
+    self.expectNext(.rbracket);
+    return try self.addArray(array);
+}
+
+fn parseBody(self: *Self) std.mem.Allocator.Error!std.ArrayList(usize) {
     var body = std.ArrayList(usize).init(self.gpa);
 
     while (self.peekTag() != .rbrace) {
@@ -412,6 +440,23 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
             continue;
         }
 
+        if (self.nodes.items(.tag)[node] == .ident and tag == .lbracket) {
+            const bracket = self.nextToken();
+
+            const eval = try self.parseExpr(0);
+            node = try self.addNode(.{
+                .tag = .index_expr,
+                .main = bracket,
+                .data = .{
+                    .lhs = node,
+                    .rhs = eval,
+                },
+            });
+
+            self.expectNext(.rbracket);
+            continue;
+        }
+
         break;
     }
 
@@ -435,6 +480,11 @@ fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
                 .data = undefined,
             });
         },
+        .lbracket => return self.addNode(.{
+            .tag = .array_declare,
+            .main = try self.parseArray(),
+            .data = undefined,
+        }),
         else => {},
     }
 

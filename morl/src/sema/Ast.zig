@@ -13,6 +13,7 @@ calls: std.ArrayList(Call),
 conds: std.ArrayList(Cond),
 loops: std.ArrayList(Loop),
 stmts: std.ArrayList(usize),
+arras: std.ArrayList(Array),
 func_res: std.StringHashMap(usize),
 
 source: []const u8,
@@ -47,11 +48,13 @@ pub const Node = struct {
         while_expr,
         call_expr,
         macro_call_expr,
+        index_expr,
 
         assign_stmt,
         return_stmt,
 
         type_declare,
+        array_declare,
         mutable_declare,
         constant_declare,
         function_declare,
@@ -75,6 +78,14 @@ pub const Loop = struct {
 
     fn deinit(self: *const Loop) void {
         self.body.deinit();
+    }
+};
+
+pub const Array = struct {
+    elements: std.ArrayList(usize),
+
+    fn deinit(self: *const Array) void {
+        self.elements.deinit();
     }
 };
 
@@ -114,6 +125,7 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
         .calls = parser.calls,
         .conds = parser.conds,
         .loops = parser.loops,
+        .arras = parser.arras,
         .nodes = parser.nodes.toOwnedSlice(),
         .funcs = parser.funcs.toOwnedSlice(),
         .func_res = parser.func_res,
@@ -123,6 +135,10 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     for (self.calls.items) |call| {
         call.args.deinit();
+    }
+
+    for (self.arras.items) |array| {
+        array.deinit();
     }
 
     for (self.conds.items) |cond| {
@@ -142,6 +158,7 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     self.conds.deinit();
     self.loops.deinit();
     self.stmts.deinit();
+    self.arras.deinit();
     self.nodes.deinit(gpa);
     self.funcs.deinit(gpa);
     self.tokens.deinit(gpa);

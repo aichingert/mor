@@ -478,8 +478,6 @@ fn genFromStatement(
             }
         },
         .function_declare => {
-            // TODO: maybe store function beginnings
-            // try self.funcs.put(f_ident, self.instructions.len);
             const fident = self.ast.nodes.items(.main)[data.lhs];
             const floc = self.ast.tokens.items(.loc)[fident];
             try fns.put(stmt, self.instructions.items.len);
@@ -786,9 +784,96 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 });
             }
         },
+        .array_declare => {
+            const array = self.ast.arras.items[main];
+            const len = array.elements.items.len;
+
+            for (array.elements.items, 0..) |_, i| {
+                try self.genFromExpression(array.elements.items[len - i - 1], ctx);
+            }
+
+            ctx.sp -= 8;
+        },
+        // TODO: holy hack this is bad! Change this as soon as possible!
+        .index_expr => {
+            const ident = self.ast.nodes.items(.main)[data.lhs];
+            const loc = self.ast.tokens.items(.loc)[ident];
+            const val = self.ast.source[loc.start..loc.end];
+
+            // calculate index
+            try self.genFromExpression(data.rhs, ctx);
+
+            // set index
+            try self.instructions.append(.{
+                .tag = .pop,
+                .lhs = .{ .register = 0 },
+            });
+            ctx.sp -= 8;
+
+            // set type size (currently hardcoded as i64)
+            try self.instructions.append(.{
+                .tag = .mov,
+                .lhs = .{ .register = 1 },
+                .rhs = .{ .immediate = 8 },
+            });
+
+            // multiply type size with index
+            try self.instructions.append(.{
+                .tag = .mul,
+                .lhs = .{ .register = 0 },
+                .rhs = .{ .register = 1 },
+            });
+
+            const operand = ctx.getVariableOperand(val);
+            // [ 3 , 2 , 1 ]
+            //
+            //   0   8   16
+            //
+            //  LEN - (POS * 8)
+            //  16  - (0 * 8)  = 16
+            //  16  - (1 * 8)  = 8
+            //  16  - (2 * 8)  = 0
+
+            const offset =
+                if (operand == .variable)
+                operand.variable
+            else if (operand == .parameter)
+                operand.parameter
+            else
+                @panic("ERROR: unable to index a number");
+
+            std.debug.print("OFF: {d}\n", .{offset});
+            std.debug.print(" SP: {d}\n", .{ctx.sp});
+
+            try self.instructions.append(.{
+                .tag = .add,
+                .lhs = .{ .register = 0 },
+                .rhs = .{ .immediate = offset },
+            });
+
+            try self.instructions.append(.{
+                .tag = .add,
+                .lhs = .{ .register = 4 },
+                .rhs = .{ .register = 0 },
+            });
+            try self.instructions.append(.{
+                .tag = .push,
+                .lhs = .{ .variable = 0 },
+            });
+            try self.instructions.append(.{
+                .tag = .sub,
+                .lhs = .{ .register = 0 },
+                .rhs = .{ .register = 4 },
+            });
+            //try self.instructions.append(.{
+            //    .tag = .sub,
+            //    .lhs = .{ .register = 4 },
+            //    .rhs = .{ .immediate = 8 },
+            //});
+        },
         else => {
             std.debug.print(
-                "TODO: not implement expr {any}",
+                "TODO: not implement expr {any}\n",
                 .{self.ast.nodes.items(.tag)[expr]},
             );
             std.process.exit(1);
