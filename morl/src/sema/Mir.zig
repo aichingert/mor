@@ -96,6 +96,7 @@ const Context = struct {
 };
 
 pub const Operand = union(enum) {
+    indexed: u8,
     register: u8,
     variable: u32,
     parameter: u32,
@@ -103,6 +104,7 @@ pub const Operand = union(enum) {
 
     fn print(self: Operand) void {
         switch (self) {
+            .indexed => std.debug.print("[rg{d}]", .{self.indexed}),
             .register => std.debug.print("rg{d}", .{self.register}),
             .variable => std.debug.print("[sp + {d}]", .{self.variable}),
             .parameter => std.debug.print("[bp + {d}]", .{self.parameter}),
@@ -289,11 +291,74 @@ fn genFromStatement(
             try ctx.locals.put(ident, ctx.sp);
         },
         .assign_stmt => {
-            const tok = self.ast.nodes.items(.main)[data.lhs];
-            const loc = self.ast.tokens.items(.loc)[tok];
+            switch (self.ast.nodes.items(.tag)[data.lhs]) {
+                .ident => {
+                    const tok = self.ast.nodes.items(.main)[data.lhs];
+                    const loc = self.ast.tokens.items(.loc)[tok];
 
-            try self.genFromExpression(data.rhs, ctx);
-            try ctx.setVariableFromStack(self, self.ast.source[loc.start..loc.end]);
+                    try self.genFromExpression(data.rhs, ctx);
+                    try ctx.setVariableFromStack(self, self.ast.source[loc.start..loc.end]);
+                },
+                .index_expr => {
+                    const lhs = self.ast.nodes.items(.data)[data.lhs].lhs;
+                    const rhs = self.ast.nodes.items(.data)[data.lhs].rhs;
+
+                    const tok = self.ast.nodes.items(.main)[lhs];
+                    const loc = self.ast.tokens.items(.loc)[tok];
+                    const val = self.ast.source[loc.start..loc.end];
+
+                    try self.genFromExpression(rhs, ctx);
+                    try self.instructions.append(.{
+                        .tag = .pop,
+                        .lhs = .{ .register = 0 },
+                    });
+                    ctx.sp -= 8;
+
+                    // set type size (currently hardcoded as i64)
+                    try self.instructions.append(.{
+                        .tag = .mov,
+                        .lhs = .{ .register = 1 },
+                        .rhs = .{ .immediate = 8 },
+                    });
+
+                    // multiply type size with index
+                    try self.instructions.append(.{
+                        .tag = .mul,
+                        .lhs = .{ .register = 0 },
+                        .rhs = .{ .register = 1 },
+                    });
+
+                    // get array start
+                    try self.instructions.append(.{
+                        .tag = .lea,
+                        .lhs = .{ .register = 1 },
+                        .rhs = ctx.getVariableOperand(val),
+                    });
+
+                    // index + base = position
+                    try self.instructions.append(.{
+                        .tag = .add,
+                        .lhs = .{ .register = 1 },
+                        .rhs = .{ .register = 0 },
+                    });
+
+                    try self.genFromExpression(data.rhs, ctx);
+
+                    try self.instructions.append(.{
+                        .tag = .pop,
+                        .lhs = .{ .register = 0 },
+                    });
+                    ctx.sp -= 8;
+
+                    // mov array[position], expr
+                    try self.instructions.append(.{
+                        .tag = .mov,
+                        .lhs = .{ .indexed = 1 },
+                        .rhs = .{ .register = 0 },
+                    });
+                },
+                else => @panic("ERROR(mir/assign): only indexed or ident as assign"),
+            }
         },
         // TODO: have to create new scope within
         // because if a new variable does not get
@@ -802,8 +867,6 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
 
             // calculate index
             try self.genFromExpression(data.rhs, ctx);
-
-            // set index
             try self.instructions.append(.{
                 .tag = .pop,
                 .lhs = .{ .register = 0 },
@@ -824,52 +887,25 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .rhs = .{ .register = 1 },
             });
 
-            const operand = ctx.getVariableOperand(val);
-            // [ 3 , 2 , 1 ]
-            //
-            //   0   8   16
-            //
-            //  LEN - (POS * 8)
-            //  16  - (0 * 8)  = 16
-            //  16  - (1 * 8)  = 8
-            //  16  - (2 * 8)  = 0
+            // get array start
+            try self.instructions.append(.{
+                .tag = .lea,
+                .lhs = .{ .register = 1 },
+                .rhs = ctx.getVariableOperand(val),
+            });
 
-            const offset =
-                if (operand == .variable)
-                operand.variable
-            else if (operand == .parameter)
-                operand.parameter
-            else
-                @panic("ERROR: unable to index a number");
-
-            std.debug.print("OFF: {d}\n", .{offset});
-            std.debug.print(" SP: {d}\n", .{ctx.sp});
-
+            // index + base = position
             try self.instructions.append(.{
                 .tag = .add,
                 .lhs = .{ .register = 0 },
-                .rhs = .{ .immediate = offset },
+                .rhs = .{ .register = 1 },
             });
 
-            try self.instructions.append(.{
-                .tag = .add,
-                .lhs = .{ .register = 4 },
-                .rhs = .{ .register = 0 },
-            });
+            // push array[position]
             try self.instructions.append(.{
                 .tag = .push,
-                .lhs = .{ .variable = 0 },
+                .lhs = .{ .indexed = 0 },
             });
-            try self.instructions.append(.{
-                .tag = .sub,
-                .lhs = .{ .register = 0 },
-                .rhs = .{ .register = 4 },
-            });
-            //try self.instructions.append(.{
-            //    .tag = .sub,
-            //    .lhs = .{ .register = 4 },
-            //    .rhs = .{ .immediate = 8 },
-            //});
         },
         else => {
             std.debug.print(

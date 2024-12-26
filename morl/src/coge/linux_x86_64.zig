@@ -79,12 +79,22 @@ fn jmp(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
 // TODO: hard coded for testing purposes
 fn lea(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    try buffer.appendSlice(&[_]u8{ rex_w, 0x8D, 0b10000000 | lhs.register << 3 | bp });
+    if (lhs != .register) @panic("ERROR(coge/lea): only supports stores in registers");
 
-    const off = rhs.parameter;
+    switch (rhs) {
+        .variable => try leaRegStk(lhs.register, sp, rhs.variable, buffer),
+        .parameter => try leaRegStk(lhs.register, bp, rhs.parameter, buffer),
+        else => @panic("ERROR(coge/lea): currently only supports var/par"),
+    }
+}
+
+// lea := 8D /r | (r64, r/m64)
+fn leaRegStk(lhs: u8, sreg: u8, rhs: u32, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x8D, 0b10000000 | lhs << 3 | sreg });
+    if (sreg == sp) try buffer.append(0x24);
 
     var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, off, .little);
+    std.mem.writeInt(u32, &buf, @intCast(rhs), .little);
     try buffer.appendSlice(&buf);
 }
 
@@ -131,6 +141,7 @@ fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     if (lhs == .immediate) @panic("ERROR(compiler): cannot mov into immediate");
 
     switch (lhs) {
+        .indexed => try movIdx(lhs.indexed, rhs, buffer),
         .register => try movReg(lhs.register, rhs, buffer),
         .variable => try movStk(sp, lhs.variable, rhs, buffer),
         .parameter => try movStk(bp, lhs.parameter, rhs, buffer),
@@ -138,8 +149,21 @@ fn mov(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     }
 }
 
+fn movIdx(regi: u8, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    switch (rhs) {
+        .register => try movIdxReg(regi, rhs.register, buffer),
+        else => @panic("TODO(coge/movi): not implemented"),
+    }
+}
+
+// mov [rax], rcx
+fn movIdxReg(regi: u8, reg: u8, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x89, regi << 3 | reg });
+}
+
 fn movReg(reg: u8, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (rhs) {
+        .indexed => @panic("ERROR(coge/movr): not implemented"),
         .variable => try movRegStk(reg, sp, rhs.variable, buffer),
         .register => try movRegReg(reg, rhs.register, buffer),
         .parameter => try movRegStk(reg, bp, rhs.parameter, buffer),
@@ -212,6 +236,7 @@ fn cmov(lhs: Mir.Operand, rhs: Mir.Operand, op: u8, buffer: *std.ArrayList(u8)) 
 
 fn pop(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (lhs) {
+        .indexed => @panic("ERROR(coge/pop): not possible?"),
         .immediate => std.debug.panic("Pop immediate?\n", .{}),
         .variable, .parameter => {
             // 8F /0
@@ -230,6 +255,7 @@ fn pop(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
 fn push(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (lhs) {
+        .indexed => try pushIndexed(lhs.indexed, buffer),
         .immediate => {
             try movRegImm(0, lhs.immediate, buffer);
             try buffer.append(0x50);
@@ -248,6 +274,11 @@ fn pushVariable(sreg: u8, offset: u32, buffer: *std.ArrayList(u8)) !void {
     var buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &buf, offset, .little);
     try buffer.appendSlice(&buf);
+}
+
+// push: FF /6 | (r/m64)
+fn pushIndexed(regi: u8, buffer: *std.ArrayList(u8)) !void {
+    try buffer.appendSlice(&[_]u8{ 0xFF, 0b00110000 | regi });
 }
 
 fn xor(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {

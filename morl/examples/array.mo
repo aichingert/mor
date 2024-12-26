@@ -1,11 +1,11 @@
 main :: () {
 
     arr := [10, 20, 30]
-    var := arr[3]
+    arr[1] = 0
 
     $asm(
         "mov rax, 60",
-        "mov rdi, var",
+        "mov rdi, arr",
         "syscall"
     )
 }

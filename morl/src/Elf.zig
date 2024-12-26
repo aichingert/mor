@@ -128,13 +128,13 @@ pub fn genExe(gpa: std.mem.Allocator, mir: Mir) !void {
 
     var bit_stream = std.io.bitWriter(.little, file.writer());
 
-    const header_off = @sizeOf(ElfHeader) + @sizeOf(ProgHeader);
-    const entry_off = base_point + header_off;
-    const file_size = header_off + machine_code.items.len;
-    var e_header = ElfHeader.init(entry_off);
-    var p_header = ProgHeader.init(.load, file_size, file_size);
-    try e_header.writeToBin(&bit_stream);
-    try p_header.writeToBin(&bit_stream);
+    //const header_off = @sizeOf(ElfHeader) + @sizeOf(ProgHeader);
+    //const entry_off = base_point + header_off;
+    //const file_size = header_off + machine_code.items.len;
+    //var e_header = ElfHeader.init(entry_off);
+    //var p_header = ProgHeader.init(.load, file_size, file_size);
+    //try e_header.writeToBin(&bit_stream);
+    //try p_header.writeToBin(&bit_stream);
 
     for (machine_code.items) |byte| {
         try bit_stream.writeBits(byte, 8);

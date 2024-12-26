@@ -3,16 +3,20 @@ section .text
 global _start
 
 _start:
-    push qword 0x1
-    push qword 0x2
     push qword 0x3
+    push qword 0x2
+    push qword 0x1
 
-    mov rax, 2
+    mov rax, 1
+    push rax
+    pop rax
     mov rcx, 8
     mul rcx
 
-    mov rdx, rsp
-    add rsp, rax
+    lea rcx, [rsp + 0]
+    add rax, rcx
+    push qword [rax]
+    pop rdi 
 
     ;mov rax, 2
     ;mov rcx, 8
@@ -24,7 +28,6 @@ _start:
     ;pop rbx
 
     mov rax, 60
-    mov rdi, [rsp]
     syscall
 
     ; push qword 0x1
