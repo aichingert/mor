@@ -158,7 +158,7 @@ fn movIdx(regi: u8, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
 // mov [rax], rcx
 fn movIdxReg(regi: u8, reg: u8, buffer: *std.ArrayList(u8)) !void {
-    try buffer.appendSlice(&[_]u8{ rex_w, 0x89, regi << 3 | reg });
+    try buffer.appendSlice(&[_]u8{ rex_w, 0x89, reg << 3 | regi });
 }
 
 fn movReg(reg: u8, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {

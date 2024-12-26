@@ -119,7 +119,7 @@ pub const Operand = union(enum) {
             return .{ .register = 0b001 };
         } else if (std.mem.eql(u8, ident, "rdx")) {
             return .{ .register = 0b010 };
-        } else if (std.mem.eql(u8, ident, "bpx")) {
+        } else if (std.mem.eql(u8, ident, "rbx")) {
             return .{ .register = 0b011 };
         } else if (std.mem.eql(u8, ident, "rsp")) {
             return .{ .register = 0b100 };
@@ -291,12 +291,13 @@ fn genFromStatement(
             try ctx.locals.put(ident, ctx.sp);
         },
         .assign_stmt => {
+            try self.genFromExpression(data.rhs, ctx);
+
             switch (self.ast.nodes.items(.tag)[data.lhs]) {
                 .ident => {
                     const tok = self.ast.nodes.items(.main)[data.lhs];
                     const loc = self.ast.tokens.items(.loc)[tok];
 
-                    try self.genFromExpression(data.rhs, ctx);
                     try ctx.setVariableFromStack(self, self.ast.source[loc.start..loc.end]);
                 },
                 .index_expr => {
@@ -307,6 +308,13 @@ fn genFromStatement(
                     const loc = self.ast.tokens.items(.loc)[tok];
                     const val = self.ast.source[loc.start..loc.end];
 
+                    try self.instructions.append(.{
+                        .tag = .pop,
+                        .lhs = .{ .register = 3 },
+                    });
+                    ctx.sp -= 8;
+
+                    // calculate index
                     try self.genFromExpression(rhs, ctx);
                     try self.instructions.append(.{
                         .tag = .pop,
@@ -338,23 +346,15 @@ fn genFromStatement(
                     // index + base = position
                     try self.instructions.append(.{
                         .tag = .add,
-                        .lhs = .{ .register = 1 },
-                        .rhs = .{ .register = 0 },
-                    });
-
-                    try self.genFromExpression(data.rhs, ctx);
-
-                    try self.instructions.append(.{
-                        .tag = .pop,
                         .lhs = .{ .register = 0 },
+                        .rhs = .{ .register = 1 },
                     });
-                    ctx.sp -= 8;
 
                     // mov array[position], expr
                     try self.instructions.append(.{
                         .tag = .mov,
-                        .lhs = .{ .indexed = 1 },
-                        .rhs = .{ .register = 0 },
+                        .lhs = .{ .indexed = 0 },
+                        .rhs = .{ .register = 3 },
                     });
                 },
                 else => @panic("ERROR(mir/assign): only indexed or ident as assign"),
