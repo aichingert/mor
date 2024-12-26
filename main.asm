@@ -3,54 +3,62 @@ section .text
 global _start
 
 _start:
-    mov rax,0x5
+    mov rax, 20
+    mov rbx, 10
+    div rbx
 
-    push rax
-    mov rax,0x0
-
-    push rax
-    mov rax,0x0
-
-    push rax
-    pop rax
-    mov rcx,0x8
-
-    mul rcx
-    lea rcx,[rsp+0x8]
-    add rax,rcx
-    push qword [rax]
-    pop rdx
-    mov rax,0x0
-
-    push rax
-    pop rax
-    mov rcx,0x8
-
-    mul rcx
-    lea rcx,[rsp+0x0]
-    add rax,rcx
-    mov [rax],rdx
-    mov rax,0x3c
-
-    mov rdi,[rsp+0x0]
+    mov rdi, rax
+    mov rax, 60
     syscall
+
+    ;; mov rax,0x5
+
+    ;; push rax
+    ;; mov rax,0x0
+
+    ;; push rax
+    ;; mov rax,0x0
+
+    ;; push rax
+    ;; pop rax
+    ;; mov rcx,0x8
+
+    ;; mul rcx
+    ;; lea rcx,[rsp+0x8]
+    ;; add rax,rcx
+    ;; push qword [rax]
+    ;; pop rdx
+    ;; mov rax,0x0
+
+    ;; push rax
+    ;; pop rax
+    ;; mov rcx,0x8
+
+    ;; mul rcx
+    ;; lea rcx,[rsp+0x0]
+    ;; add rax,rcx
+    ;; mov [rax],rdx
+    ;; mov rax,0x3c
+
+    ;; mov rdi,[rsp+0x0]
+    ;; syscall
  
 
 
-    push qword 0x3
-    push qword 0x2
-    push qword 0x1
+    ;; push qword 0x3
+    ;; push qword 0x2
+    ;; push qword 0x1
 
-    mov rax, 1
-    push rax
-    pop rax
-    mov rcx, 8
-    mul rcx
+    ;; mov rax, 1
+    ;; push rax
+    ;; pop rax
+    ;; mov rcx, 8
+    ;; mul rcx
 
-    lea rcx, [rsp + 0]
-    add rax, rcx
-    push qword [rax]
-    pop rdi 
+    ;; lea rcx, [rsp + 0]
+    ;; add rax, rcx
+    ;; push qword [rax]
+    ;; pop rdi 
 
     ;mov rax, 2
     ;mov rcx, 8

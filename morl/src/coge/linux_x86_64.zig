@@ -37,17 +37,19 @@ pub fn genCode(gpa: std.mem.Allocator, instr: []Mir.Instr) !std.ArrayList(u8) {
             .bit_or => try bit_or(item.lhs.?, item.rhs.?, &machine_code),
             .bit_and => try bit_and(item.lhs.?, item.rhs.?, &machine_code),
 
+            .neg => try neg(item.lhs.?, &machine_code),
             .add => try add(item.lhs.?, item.rhs.?, &machine_code),
             .sub => try sub(item.lhs.?, item.rhs.?, &machine_code),
             .mul => try mul(item.lhs.?, item.rhs.?, &machine_code),
+            .div => try div(item.lhs.?, item.rhs.?, &machine_code),
 
             .ret => try machine_code.append(0xC3),
             .call => try call(item.lhs.?, &machine_code),
             .syscall => try syscall(&machine_code),
-            else => {
-                std.debug.print("Tag: {any}\n", .{item.tag});
-                @panic("ERROR(coge/gen): failed invalid instruction");
-            },
+            //else => {
+            //    std.debug.print("Tag: {any}\n", .{item.tag});
+            //    @panic("ERROR(coge/gen): failed invalid instruction");
+            //},
         }
     }
 
@@ -314,6 +316,13 @@ fn bit_and(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void
     try buffer.appendSlice(&[_]u8{ rex_w, 0x23, 0b11000000 | (lhs.register << 3) | rhs.register });
 }
 
+// neg := REX.W + F7 /3 | (r/m64)
+fn neg(lhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
+    if (lhs != .register) @panic("ERROR(coge/neg): can only negate registers");
+
+    try buffer.appendSlice(&[_]u8{ rex_w, 0xF7, 0b11011000 | lhs.register });
+}
+
 // add := REX.W + 01 /r
 fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (rhs) {
@@ -370,19 +379,13 @@ fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     //try movRegReg(0, 7, buffer);
 }
 
+// div := REX.W + F7 /6
 fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    _ = rhs;
-    // TODO: implement mov for operand
+    std.debug.print("DIV: {any} - {any}\n", .{ lhs, rhs });
 
-    // mov(lhs) ; try movRegImm(2, imm64: i64, buffer: *std.ArrayList(u8)) !void {
-
-    // Rex.W
-    // 01001000
-    try buffer.append(rex_w);
-    try buffer.append(0xF7);
-    // ModR/M
-    // MR => r/m | reg
-    try buffer.append(0b11111000 + lhs.register);
+    try mov(.{ .register = 3 }, lhs, buffer);
+    try mov(.{ .register = 0 }, rhs, buffer);
+    try buffer.appendSlice(&[_]u8{ rex_w, 0xF7, 0b11110011 });
 }
 
 fn syscall(buffer: *std.ArrayList(u8)) !void {
