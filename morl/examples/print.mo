@@ -6,16 +6,29 @@ print_num :: (num: i64) {
         n = -n
     }
 
-    out := [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    out := [0,0,0,0,0]
     len := 0
 
     while n != 0 {
+        $asm("mov rdx, 0")
         div := n / 10
-        rem := n - div * 10
 
-        out[len] = rem
+        rem := 0
+        $asm("mov rem, rdx")
+
+        out[len] = rem + 48
         n = div
         len = len + 1
+    }
+
+    i := 0
+    while i < len {
+        idx := len
+        idx = idx - i
+        idx = idx - 1
+
+        print_u8(out[idx])
+        i = i + 1
     }
 
     print_u8(10)
@@ -47,7 +60,7 @@ main :: () {
 
     print_arr([45, 48,49,50,51], 4)
 
-    print_num(123)
+    print_num(-123)
 }
 
 

@@ -950,12 +950,13 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
 
 fn parseOperand(ctx: *Context, ident: []const u8, is_lhs: bool, parseable: bool) Operand {
     const off: usize = if (is_lhs) 1 else 0;
+    const val = ident[0 .. ident.len - off];
 
-    if (Operand.registerFromIdent(ident[0 .. ident.len - off])) |reg| {
+    if (Operand.registerFromIdent(val)) |reg| {
         return reg;
     }
 
-    if (!parseable) return ctx.getVariableOperand(ident);
+    if (!parseable) return ctx.getVariableOperand(val);
 
     const number = std.fmt.parseInt(i64, ident, 10) catch {
         return ctx.getVariableOperand(ident);

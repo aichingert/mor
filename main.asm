@@ -3,13 +3,56 @@ section .text
 global _start
 
 _start:
-    mov rax, 20
-    mov rbx, 10
+    mov rax, 3
+    mov rbx, 5
+
     div rbx
 
     mov rdi, rax
     mov rax, 60
     syscall
+
+;;     push qword [rsp+0x8]
+;;     mov rax,0x0
+;; 
+;;     push rax
+;;     pop rax
+;;     pop rcx
+;;     mov rdx,0x0
+;; 
+;;     cmp rcx,rax
+;;     mov rbx,0x1
+;; 
+;;     cmovg rdx,rbp
+;;     push rdx
+;;     pop rax
+;;     cmp rax,0x0
+;;     jz .end
+;;     push qword [rsp+0x8]
+;;     push qword [rsp+0x8]
+;;     pop rax
+;;     pop rcx
+;;     mov rbx,rax
+;;     mov rax,rcx
+;;     div rbx
+;;     push rax
+;;     pop rax
+;;     mov [rsp+0x8],rax
+;;     jmp .loop
+;; .end:
+;;     mov rax,0x3c
+;; 
+;;     mov rdi,[rsp+0x8]
+;;     syscall
+;; 
+;; 
+;;     mov rax, 20
+;;     mov rbx, 10
+;;     div rbx
+;; 
+;;     mov rdi, rax
+;;     mov rax, 60
+;;     syscall
 
     ;; mov rax,0x5
 
