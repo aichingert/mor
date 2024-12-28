@@ -5,38 +5,93 @@ aichingert
 :toclevels: 3
 :experimental:
 
-the mor programming language
+the mor programming language (zero dependencies since you cannot trust other code)
 
 == syntax
 
-[source, mor]
+.example: printing a number
+[source, odin]
 ----
-// TODO: currently working on functions so they 
-// do not work right now but should very soon
-fib :: (n: i32) -> i32 {
-    if n <= 1 {
-        return 1
+print_num :: (num: i64) {
+    n := num
+
+    if n < 0 {
+        print_u8(45)
+        n = -n
     }
 
-    return fib(n - 1) + fib(n - 2)
+    out := [0,0,0,0,0,0,0,0,0,0]
+    len := 0
+
+    while n != 0 {
+        $asm("mov rdx, 0")
+        div := n / 10
+
+        rem := 0
+        $asm("mov rem, rdx")
+
+        out[len] = rem + 48
+        n = div
+        len = len + 1
+    }
+
+    i := 0
+    while i < len {
+        print_u8(out[len - i - 1])
+        i = i + 1
+    }
+
+    print_u8(10)
 }
 
-// NOTE: semicolons are currently not used
-// but should be in the future
-main :: () {
-    amount := 20
+print_arr :: (arr: u8, len: u8) {
+    i := 0
 
-    result := fib(amount)
+    while i < len {
+        print_u8(arr[i])
+        i = i + 1
+    }
+
+    print_u8(10)
+}
+
+print_u8 :: (n: i32) {
+    $asm(
+        "mov rax, 1",
+        "lea rsi, n",
+        "mov rdi, 1",
+        "mov rdx, 8",
+        "syscall"
+    )
+}
+
+main :: () {
+    n := 65
+
+    print_arr([45, 48,49,50,51], 4)
+
+    ten := 10
+    five := 5
+    res := 2 * ten - 7 * 3
+
+    print_num(res)
 }
 ----
 
 == features
 
-Should be reasonable fast and low level to properly interact with the operating system. 
-This is currently achieved by the $asm() compiler-macro which can be used to make syscalls
-and store the values of the registers into variables.
-It should also provide some zero cost abstractions to make things simpler and not slower as well as
-some reasonable syntax sugar for certain cases (e.g. indexing from the back of an array or container)
+* reasonable fast (in the future there should be a split between the compiler frontend and backend) 
+* freedom to do pretty much anything you want, if you know how to
+** achieved through the *$asm* compiler-macro which enables you to
+*** make syscalls yourself
+*** access registers and store values in them as well as get values from them (the compiler might modify them, so do not store values long term in them)
+
+== TODO
+
+* indexing (ranges maybe)
+* some kind of iterators
+* anonymous structs (still thinking about it)
+* lots of syntax sugar ;) since I do not want to type a lot to do something
 
 == resources
 
