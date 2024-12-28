@@ -360,11 +360,6 @@ fn genFromStatement(
                 else => @panic("ERROR(mir/assign): only indexed or ident as assign"),
             }
         },
-        // TODO: have to create new scope within
-        // because if a new variable does not get
-        // deleted in the function the stack ptr
-        // will get offsetet and all indexes will
-        // be broken!
         .if_expr => {
             // cmp cond-1
             // je .blk -1
@@ -379,13 +374,14 @@ fn genFromStatement(
             // .end
 
             const cond = self.ast.conds.items[data.lhs];
+            var if_ctx = try ctx.clone();
 
-            try self.genFromExpression(cond.if_cond, ctx);
+            try self.genFromExpression(cond.if_cond, &if_ctx);
             try self.instructions.append(.{
                 .tag = .pop,
                 .lhs = .{ .register = 0 },
             });
-            ctx.sp -= 8;
+            if_ctx.sp -= 8;
 
             try self.instructions.append(.{
                 .tag = .cmp,
@@ -401,7 +397,7 @@ fn genFromStatement(
             var jps = std.ArrayList(usize).init(self.gpa);
 
             for (cond.if_body.items) |body_stmt| {
-                try self.genFromStatement(body_stmt, ctx, fns);
+                try self.genFromStatement(body_stmt, &if_ctx, fns);
             }
 
             try self.instructions.append(.{
@@ -420,12 +416,12 @@ fn genFromStatement(
             for (cond.elif_ex.items) |idx| {
                 const elif = self.ast.conds.items[idx];
 
-                try self.genFromExpression(elif.if_cond, ctx);
+                try self.genFromExpression(elif.if_cond, &if_ctx);
                 try self.instructions.append(.{
                     .tag = .pop,
                     .lhs = .{ .register = 0 },
                 });
-                ctx.sp -= 8;
+                if_ctx.sp -= 8;
 
                 try self.instructions.append(.{
                     .tag = .cmp,
@@ -439,7 +435,7 @@ fn genFromStatement(
                 ptr = self.instructions.items.len;
 
                 for (elif.if_body.items) |body_stmt| {
-                    try self.genFromStatement(body_stmt, ctx, fns);
+                    try self.genFromStatement(body_stmt, &if_ctx, fns);
                 }
 
                 try self.instructions.append(.{
@@ -455,7 +451,7 @@ fn genFromStatement(
             }
 
             for (cond.el_body.items) |body_stmt| {
-                try self.genFromStatement(body_stmt, ctx, fns);
+                try self.genFromStatement(body_stmt, &if_ctx, fns);
             }
 
             for (jps.items) |jmp| {
@@ -464,6 +460,20 @@ fn genFromStatement(
                 self.instructions.items[jmp - 1].lhs.?.immediate = @intCast(jump);
                 bytes.deinit();
             }
+
+            var iter = if_ctx.locals.iterator();
+            while (iter.next()) |kv| {
+                if (ctx.locals.contains(kv.key_ptr.*)) {
+                    try ctx.locals.put(kv.key_ptr.*, kv.value_ptr.*);
+                } else {
+                    try self.instructions.append(.{ .tag = .pop, .lhs = .{ .register = 0 } });
+                    if_ctx.sp -= 8;
+                }
+            }
+
+            if_ctx.params.deinit();
+            if_ctx.locals.deinit();
+            ctx.sp = if_ctx.sp;
 
             jps.deinit();
         },

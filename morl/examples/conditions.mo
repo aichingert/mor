@@ -4,17 +4,21 @@ main :: () {
     c : i8 = 10
     
     if 0 {
-        a = 1
-        b = 1
+        o :: 1
+        a = o
+        b = o
     } elif 0 { 
-        a = 2
-        b = 2
+        t :: 2
+        a = t
+        b = t
     } elif 0 {
-        a = 3
-        b = 3
+        d :: 3
+        a = d
+        b = d
     } else {
-        a = 5
-        b = 5
+        f :: 5
+        a = f
+        b = f
     }
 
     c = a + b
