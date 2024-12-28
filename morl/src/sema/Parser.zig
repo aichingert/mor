@@ -249,8 +249,6 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
     const next = self.nextToken();
     switch (self.tok_tags[next]) {
         .colon, .equal => {
-            std.debug.print("{any} {any}\n", .{ self.tok_tags[next], node });
-
             const expr = try self.parseDeclareExpression();
 
             if (self.nodes.items(.tag)[expr] == .function_declare) {
@@ -402,7 +400,7 @@ fn parseExpr(self: *Self, prec: u8) std.mem.Allocator.Error!usize {
     while (self.peekTag() != .eof) {
         const tag = self.peekTag();
 
-        if (tag.isBinaryOp() and tag.precedence() >= prec) {
+        if (tag.isBinaryOp() and tag.precedence() > prec) {
             const binary = self.nextToken();
             const rhs = try self.parseExpr(tag.precedence());
 

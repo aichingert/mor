@@ -6,7 +6,7 @@ print_num :: (num: i64) {
         n = -n
     }
 
-    out := [0,0,0,0,0]
+    out := [0,0,0,0,0,0,0,0,0,0]
     len := 0
 
     while n != 0 {
@@ -23,11 +23,7 @@ print_num :: (num: i64) {
 
     i := 0
     while i < len {
-        idx := len
-        idx = idx - i
-        idx = idx - 1
-
-        print_u8(out[idx])
+        print_u8(out[len - i - 1])
         i = i + 1
     }
 
@@ -60,7 +56,11 @@ main :: () {
 
     print_arr([45, 48,49,50,51], 4)
 
-    print_num(-123)
+    ten := 10
+    five := 5
+    res := 2 * ten - 7 * 3
+
+    print_num(res)
 }
 
 

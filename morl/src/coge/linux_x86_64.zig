@@ -344,8 +344,6 @@ fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
     switch (rhs) {
         .register => {
-            std.debug.print("SUB: {any} | {any} \n", .{ lhs, rhs });
-
             try buffer.append(rex_w);
             try buffer.append(0x29);
             try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
@@ -381,8 +379,6 @@ fn mul(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
 
 // div := REX.W + F7 /6
 fn div(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
-    std.debug.print("DIV: {any} - {any}\n", .{ lhs, rhs });
-
     try mov(.{ .register = 3 }, lhs, buffer);
     try mov(.{ .register = 0 }, rhs, buffer);
     try buffer.appendSlice(&[_]u8{ rex_w, 0xF7, 0b11110011 });
