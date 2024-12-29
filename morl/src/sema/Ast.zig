@@ -41,6 +41,7 @@ pub const Node = struct {
         bol_expr,
         vod_expr,
 
+        paren_expr,
         unary_expr,
         binary_expr,
 

@@ -286,7 +286,16 @@ fn parseDeclare(self: *Self) std.mem.Allocator.Error!usize {
 
 fn parseDeclareExpression(self: *Self) std.mem.Allocator.Error!usize {
     switch (self.peekTag()) {
-        .lparen => return self.parseFunc(),
+        .identifier => {
+            const val = self.source[self.tok_locs[self.tok_i].start..self.tok_locs[self.tok_i].end];
+
+            if (!std.mem.eql(u8, val, "fn")) {
+                return self.parseExpr(0);
+            }
+
+            self.expectNext(.identifier);
+            return self.parseFunc();
+        },
         else => return self.parseExpr(0),
     }
 }
@@ -483,6 +492,17 @@ fn parsePrefix(self: *Self) std.mem.Allocator.Error!usize {
             .main = try self.parseArray(),
             .data = undefined,
         }),
+        .lparen => {
+            self.expectNext(.lparen);
+            const expr = try self.parseExpr(0);
+            self.expectNext(.rparen);
+
+            return self.addNode(.{
+                .tag = .paren_expr,
+                .main = expr,
+                .data = undefined,
+            });
+        },
         else => {},
     }
 

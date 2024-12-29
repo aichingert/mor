@@ -1,8 +1,8 @@
-main :: () {
+main :: fn() {
     a := 3
     b := 8
 
-    c := 2 - 1 - 1
+    c :: (b - a) * 2
 
     $asm(
         "mov rax, 60",

@@ -1,4 +1,4 @@
-print_num :: (num: i64) {
+print_num :: fn(num: i64) {
     n := num
 
     if n < 0 {
@@ -30,7 +30,7 @@ print_num :: (num: i64) {
     print_u8(10)
 }
 
-print_arr :: (arr: u8, len: u8) {
+print_arr :: fn(arr: u8, len: u8) {
     i := 0
 
     while i < len {
@@ -41,7 +41,7 @@ print_arr :: (arr: u8, len: u8) {
     print_u8(10)
 }
 
-print_u8 :: (n: i32) {
+print_u8 :: fn(n: i32) {
     $asm(
         "mov rax, 1",
         "lea rsi, n",
@@ -51,7 +51,7 @@ print_u8 :: (n: i32) {
     )
 }
 
-main :: () {
+main :: fn() {
     n := 65
 
     print_arr([45, 48,49,50,51], 4)

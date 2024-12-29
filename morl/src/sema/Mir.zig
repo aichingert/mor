@@ -917,6 +917,10 @@ fn genFromExpression(self: *Self, expr: usize, ctx: *Context) !void {
                 .lhs = .{ .indexed = 0 },
             });
         },
+        .paren_expr => {
+            defer ctx.sp -= 8;
+            return try self.genFromExpression(main, ctx);
+        },
         else => {
             std.debug.print(
                 "TODO: not implement expr {any}\n",

@@ -1,4 +1,4 @@
-fib :: (n: i32) -> i32 {
+fib :: fn(n: i32) -> i32 {
     if n <= 1 {
         return 1
     }
@@ -6,7 +6,7 @@ fib :: (n: i32) -> i32 {
     return fib(n - 1) + fib(n - 2)
 }
 
-main :: () {
+main :: fn() {
     a : i32 = 1
     b : i32 = 0
     c : i32 = 0

@@ -1,4 +1,4 @@
-main :: () {
+main :: fn() {
     a : str : 3
     b : i8 = 5
     c : i8 = 10
