@@ -1,5 +1,8 @@
 // Tct.zig: Type checked tree
 
+const std = @import("std");
+const Ast = @import("Ast.zig");
+
 const Self = @This();
 
 // TODO: add in between step of ast and mir
@@ -14,7 +17,7 @@ const Self = @This();
 // n : u8 = 255
 // a : u8[][] = {0}
 // f : fn(i32) -> i32 = |a| a + 1
-// s : structy = structy{ a := 10, b := 20 } // not sure about this syntax
+// s : structy = { a := 10, b := 20 } // not sure about this syntax
 //
 // numbers -> u8, i8 - u64, i64 ? is there a difference between sizes or should it truncate/extend them
 // strings -> pretty simple they are just an array of characters
@@ -26,13 +29,54 @@ const Self = @This();
 //            an array so you can index it, but then again the size does matter because when you index an
 //            array you get another type
 
-pub const Type = struct {
-    expt: Tag,
-    node: u32,
+// TODO: not sure...
+source: []const u8,
+
+types: std.ArrayList(Type),
+nodes: std.ArrayList(Node),
+
+t_numbers: std.ArrayList(TypedNumber),
+
+pub const Node = struct {
+    tag: Tag,
+    lhs: u32,
+    rhs: u32,
 
     const Tag = struct {
-        .array,
-        .builtin,
-        .function,
+        .binary_expr,
+        .number_expr,
+        .unary_expr,
     };
 };
+
+pub const Type = struct {
+    tag: Tag,
+
+    val: u32,
+    typ: u32,
+
+    const Tag = struct {
+        .signed_number,
+        .unsigned_number,
+    };
+};
+
+pub const TypedNumber = struct {
+    size: u8,
+};
+
+pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
+    return .{
+        .source = ast.source,
+
+        .types = std.ArrayList(Type).init(gpa),
+        .nodes = std.ArrayList(Node).init(gpa),
+        .t_numbers = std.ArrayList(TypedNumber).init(gpa),
+    };
+}
+
+pub fn deinit(self: *Self) void {
+    self.types.deinit();
+    self.nodes.deinit();
+    self.t_numbers.deinit();
+}
