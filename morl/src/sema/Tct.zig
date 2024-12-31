@@ -1,7 +1,13 @@
 // Tct.zig: Type checked tree
+// NOTE: this is my attempt to enforce types
+// I should probably learn more about type
+// theory but I found out that I learn the most
+// if I just do something mess up and then do it
+// again. So this is just try
 
 const std = @import("std");
 const Ast = @import("Ast.zig");
+const Token = @import("lexer.zig").Token;
 
 const Self = @This();
 
@@ -33,50 +39,77 @@ const Self = @This();
 source: []const u8,
 
 types: std.ArrayList(Type),
-nodes: std.ArrayList(Node),
+locals: std.StringHashMap(Type),
+funcs: std.StringHashMap(TypedFunc),
 
 t_numbers: std.ArrayList(TypedNumber),
-
-pub const Node = struct {
-    tag: Tag,
-    lhs: u32,
-    rhs: u32,
-
-    const Tag = struct {
-        .binary_expr,
-        .number_expr,
-        .unary_expr,
-    };
-};
+t_singles: std.ArrayList(TypedSingleExpr),
+t_binaries: std.ArrayList(TypedBinaryExpr),
 
 pub const Type = struct {
     tag: Tag,
+    val: Token,
 
-    val: u32,
     typ: u32,
 
-    const Tag = struct {
-        .signed_number,
-        .unsigned_number,
+    const Tag = enum {
+        unknown,
+        signed_number,
+        unsigned_number,
+
+        unary_expr,
+        binary_expr,
+
+        // TODO: can these be the same?
+        // probably not.
+        constant_type,
+        variable_type,
+
+        function_type,
     };
+};
+
+pub const TypedFunc = struct {
+    args: std.ArrayList(Type),
+    body: std.ArrayList(Type),
 };
 
 pub const TypedNumber = struct {
     size: u8,
 };
 
-pub fn init(gpa: std.mem.Allocator, ast: Ast) Self {
-    return .{
+// NOTE: used for paren- and unary expressions
+// since both of them only have a single value
+pub const TypedSingleExpr = struct {
+    typ: u32,
+};
+
+pub const TypedBinaryExpr = struct {
+    lhs: u32,
+    rhs: u32,
+};
+
+pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
+    var tct = .{
         .source = ast.source,
 
         .types = std.ArrayList(Type).init(gpa),
-        .nodes = std.ArrayList(Node).init(gpa),
+        .funcs = std.StringHashMap(TypedFunc).init(gpa),
+        .locals = std.StringHashMap(Type).init(gpa),
         .t_numbers = std.ArrayList(TypedNumber).init(gpa),
+        .t_singles = std.ArrayList(TypedSingleExpr).init(gpa),
+        .t_binaries = std.ArrayList(TypedBinaryExpr).init(gpa),
     };
+    try tct.types.append(.{ .tag = .unknown, .val = undefined, .typ = 0 });
+
+    return tct;
 }
 
 pub fn deinit(self: *Self) void {
     self.types.deinit();
-    self.nodes.deinit();
+    self.funcs.deinit();
+    self.locals.deinit();
     self.t_numbers.deinit();
+    self.t_singles.deinit();
+    self.t_binaries.deinit();
 }

@@ -3,5 +3,8 @@ main :: fn() {
     bigger : u16 = 20
 
     // Should complain
-    plus : u16 = small + bigger // because small and bigger have different types
+    // because small and bigger have different types
+    plus : u16 = small + bigger 
+
+    $asm("mov rax, 60", "mov rdi, plus", "syscall")
 }
