@@ -133,6 +133,12 @@ pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!
     };
 }
 
+pub fn getIdent(self: *const Self, idx: usize) []const u8 {
+    const ident = self.nodes.items(.main)[idx];
+    const loc = self.tokens.items(.loc)[ident];
+    return self.source[loc.start..loc.end];
+}
+
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     for (self.calls.items) |call| {
         call.args.deinit();

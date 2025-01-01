@@ -39,7 +39,6 @@ const Self = @This();
 source: []const u8,
 
 types: std.ArrayList(Type),
-locals: std.StringHashMap(Type),
 funcs: std.StringHashMap(TypedFunc),
 
 t_numbers: std.ArrayList(TypedNumber),
@@ -52,13 +51,14 @@ pub const Type = struct {
 
     typ: u32,
 
-    const Tag = enum {
+    pub const Tag = enum {
         unknown,
         signed_number,
         unsigned_number,
 
         unary_expr,
         binary_expr,
+        return_expr,
 
         // TODO: can these be the same?
         // probably not.
@@ -70,8 +70,35 @@ pub const Type = struct {
 };
 
 pub const TypedFunc = struct {
-    args: std.ArrayList(Type),
+    args: std.ArrayList(Type.Tag),
     body: std.ArrayList(Type),
+
+    return_type: Type.Tag,
+
+    fn init(gpa: std.mem.Allocator, ast: *const Ast, stmt: usize) TypedFunc {
+        var func = .{
+            .args = std.ArrayList(Type.Tag).init(gpa),
+            .body = std.ArrayList(Type).init(gpa),
+
+            .return_type = .unknown,
+        };
+
+        std.debug.print("{any}\n", .{ast.nodes.items(.tag)[stmt]});
+        const ast_func = ast.nodes.items(.data)[stmt].rhs;
+
+        for (ast.funcs.items(.args)[ast_func].items) |arg| {
+            std.debug.print("{any}\n", .{arg});
+        }
+
+        func.return_type = .unknown;
+
+        return func;
+    }
+
+    fn deinit(self: *TypedFunc) void {
+        self.args.deinit();
+        self.body.deinit();
+    }
 };
 
 pub const TypedNumber = struct {
@@ -95,20 +122,41 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
 
         .types = std.ArrayList(Type).init(gpa),
         .funcs = std.StringHashMap(TypedFunc).init(gpa),
-        .locals = std.StringHashMap(Type).init(gpa),
         .t_numbers = std.ArrayList(TypedNumber).init(gpa),
         .t_singles = std.ArrayList(TypedSingleExpr).init(gpa),
         .t_binaries = std.ArrayList(TypedBinaryExpr).init(gpa),
     };
+
+    std.debug.print("<Tct.zig  \\\n", .{});
+
+    for (ast.stmts.items) |stmt| {
+        const tag = ast.nodes.items(.tag)[stmt];
+
+        switch (tag) {
+            .function_declare => {
+                const typed_func = TypedFunc.init(gpa, &ast, stmt);
+                try tct.funcs.put(ast.getIdent(ast.nodes.items(.data)[stmt].lhs), typed_func);
+            },
+            else => @panic("Error(Tct.zig): unknown top level statement"),
+        }
+
+        std.debug.print("{any}\n", .{tag});
+    }
+
+    std.debug.print("Tct.zig   />\n", .{});
     try tct.types.append(.{ .tag = .unknown, .val = undefined, .typ = 0 });
 
     return tct;
 }
 
 pub fn deinit(self: *Self) void {
+    var fs = self.funcs.iterator();
+    while (fs.next()) |kv| {
+        kv.value_ptr.*.deinit();
+    }
+
     self.types.deinit();
     self.funcs.deinit();
-    self.locals.deinit();
     self.t_numbers.deinit();
     self.t_singles.deinit();
     self.t_binaries.deinit();
