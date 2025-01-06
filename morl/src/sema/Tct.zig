@@ -45,11 +45,16 @@ t_numbers: std.ArrayList(TypedNumber),
 t_singles: std.ArrayList(TypedSingleExpr),
 t_binaries: std.ArrayList(TypedBinaryExpr),
 
-pub const Type = struct {
-    tag: Tag,
-    val: Token,
+const TypeEnvironment = struct {
+    dyns: std.StringHashMap(u32),
 
-    typ: u32,
+    vars: std.StringHashMap(u32),
+    func: std.StringHashMap(u32),
+};
+
+pub const Type = struct {
+    at: u32,
+    tag: Tag,
 
     pub const Tag = enum {
         unknown,
@@ -67,30 +72,58 @@ pub const Type = struct {
 
         function_type,
     };
+
+    fn defaultTypes(ast: *const Ast, tok: Token) ?Tag {
+        const ident = ast.source[tok.loc.start..tok.loc.end];
+
+        if (std.mem.eql(u8, ident, "u32")) {
+            return .unsigned_number;
+        }
+        if (std.mem.eql(u8, ident, "i32")) {
+            return .signed_number;
+        }
+
+        return null;
+    }
+
+    fn typeDeclare(ast: *const Ast, ident: Token, itype: Token) Type {
+        _ = ident;
+
+        const tag = if (defaultTypes(ast, itype)) |def| def else .unknown;
+
+        return .{
+            .tag = tag,
+        };
+    }
 };
 
 pub const TypedFunc = struct {
-    args: std.ArrayList(Type.Tag),
+    args: std.ArrayList(Type),
     body: std.ArrayList(Type),
 
-    return_type: Type.Tag,
+    return_type: Type,
 
     fn init(gpa: std.mem.Allocator, ast: *const Ast, stmt: usize) TypedFunc {
-        var func = .{
-            .args = std.ArrayList(Type.Tag).init(gpa),
+        var func: TypedFunc = .{
+            .args = std.ArrayList(Type).init(gpa),
             .body = std.ArrayList(Type).init(gpa),
 
-            .return_type = .unknown,
+            .return_type = .{ .at = 0, .tag = undefined },
         };
 
         std.debug.print("{any}\n", .{ast.nodes.items(.tag)[stmt]});
         const ast_func = ast.nodes.items(.data)[stmt].rhs;
 
         for (ast.funcs.items(.args)[ast_func].items) |arg| {
-            std.debug.print("{any}\n", .{arg});
+            const tag = ast.nodes.items(.tag)[arg];
+            const data = ast.nodes.items(.data)[arg];
+
+            const param = data.lhs;
+            const ptype = data.rhs;
+            std.debug.print("{any}  | {any} {any}\n", .{ tag, param, ptype });
         }
 
-        func.return_type = .unknown;
+        func.return_type = .{ .at = 1, .tag = undefined };
 
         return func;
     }
@@ -103,17 +136,20 @@ pub const TypedFunc = struct {
 
 pub const TypedNumber = struct {
     size: u8,
+    val: Token,
 };
 
 // NOTE: used for paren- and unary expressions
 // since both of them only have a single value
 pub const TypedSingleExpr = struct {
     typ: u32,
+    val: Token,
 };
 
 pub const TypedBinaryExpr = struct {
     lhs: u32,
     rhs: u32,
+    val: Token,
 };
 
 pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
@@ -134,8 +170,10 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
 
         switch (tag) {
             .function_declare => {
-                const typed_func = TypedFunc.init(gpa, &ast, stmt);
-                try tct.funcs.put(ast.getIdent(ast.nodes.items(.data)[stmt].lhs), typed_func);
+                try tct.funcs.put(
+                    ast.getIdent(ast.nodes.items(.data)[stmt].lhs),
+                    TypedFunc.init(gpa, &ast, stmt),
+                );
             },
             else => @panic("Error(Tct.zig): unknown top level statement"),
         }
@@ -144,7 +182,7 @@ pub fn init(gpa: std.mem.Allocator, ast: Ast) !Self {
     }
 
     std.debug.print("Tct.zig   />\n", .{});
-    try tct.types.append(.{ .tag = .unknown, .val = undefined, .typ = 0 });
+    try tct.types.append(.{ .at = 0, .tag = .unknown });
 
     return tct;
 }
