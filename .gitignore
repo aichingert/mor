@@ -7,4 +7,5 @@ bin
 prog.asm
 prog.o
 prog
-a.out
+*.out
+build/
