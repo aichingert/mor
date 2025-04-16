@@ -14,6 +14,9 @@ int main(int argc, char **argv) {
 
     nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"main", SRC_FOLDER"main.c");
 
+    nob_cc_flags(&cmd);
+    nob_cc_inputs(&cmd, SRC_FOLDER "parser.c");
+
     if (!nob_cmd_run_sync(cmd)) return 1;
 
     return 0;
