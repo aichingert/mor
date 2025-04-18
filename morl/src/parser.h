@@ -1,24 +1,29 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "darray.h"
-
 typedef enum {
+    LITERAL, NUMERAL,
+
     // symbols
-    lparen, rparen, lbrace, rbrace, lbracket, rbracket,
+    LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
 
     // operations
-    plus, minus,
+    PLUS, MINUS,
 
     // keywords
-    kw_struct
+    KW_STRUCT,
 
+    M_EOF,
 } tag;
 
 typedef struct {
+    int start;
     int end;
+    int line;
+
     tag kind;
 } token;
 
+token* tokenize(char *source, size_t *out_len);
 
 #endif /* PARSER_H */
