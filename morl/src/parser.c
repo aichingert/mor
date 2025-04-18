@@ -17,7 +17,7 @@ bool is_number(char c) {
 token next_token(char *src, size_t *out_idx, int *out_line) {
     size_t idx = *out_idx;
     int line = *out_line;
-    tag kind = M_EOF;
+    token_tag kind = M_EOF;
 
 tok_loop: 
     while (src[idx] != '\0') {
