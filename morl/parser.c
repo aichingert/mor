@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "darray.h"
+#include "nob.h"
 #include "parser.h"
 
 bool is_literal(char c) {
@@ -70,16 +70,15 @@ tok_loop:
     return tok;
 }
 
-token* tokenize(char *src, size_t *out_len) {
+tokens tokenize(char *src) {
     size_t idx = 0;
     int line = 1;
-    token *tokens = array(token);
+    tokens toks = {0};
 
     while (src[idx] != '\0') {
-        array_append(tokens, next_token(src, &idx, &line));
-        *out_len = *out_len + 1;
+        nob_da_append(&toks, next_token(src, &idx, &line));
     }
 
-    return tokens;
+    return toks;
 }
 

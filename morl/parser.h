@@ -1,6 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stddef.h>
+
 typedef enum {
     LITERAL, NUMERAL,
 
@@ -32,6 +34,13 @@ typedef struct {
     token_tag kind;
 } token;
 
+typedef struct {
+    token *items;
+    size_t count;
+    size_t capacity;
+} tokens;
+
+/*
 struct node;
 
 typedef struct {
@@ -62,7 +71,10 @@ typedef struct {
         struct_def s_stmt;
     }
 } node;
+*/
 
-token* tokenize(char *source, size_t *out_len);
+tokens tokenize(char *source);
+
+//node* parse(token *tokens, size_t len);
 
 #endif /* PARSER_H */

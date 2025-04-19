@@ -2,8 +2,8 @@
 
 #include "nob.h"
 
-#define BUILD_FOLDER "build/"
-#define SRC_FOLDER   "src/"
+#define BUILD_FOLDER "./"
+#define SRC_FOLDER   "./"
 
 int main(int argc, char **argv) {
     NOB_GO_REBUILD_URSELF(argc, argv);
@@ -12,9 +12,11 @@ int main(int argc, char **argv) {
 
     Nob_Cmd cmd = {0};
 
-    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"main", SRC_FOLDER"main.c");
+    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"mor", SRC_FOLDER"mor.c");
 
     nob_cc_flags(&cmd);
+    nob_cc_inputs(&cmd, SRC_FOLDER "nob.h");
+    nob_cc_inputs(&cmd, SRC_FOLDER "parser.h");
     nob_cc_inputs(&cmd, SRC_FOLDER "parser.c");
 
     if (!nob_cmd_run_sync(cmd)) return 1;
