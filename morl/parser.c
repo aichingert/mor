@@ -27,7 +27,7 @@ tok_loop:
 
             while(src[idx] != '\0' && is_literal(src[idx])) idx++;
 
-            if (idx - start > 5 && strncmp(src + start, "struct", 6) == 0) kind = KW_STRUCT;
+            if (idx - start == 6 && strncmp(src + start, "struct", 6) == 0) kind = KW_STRUCT;
 
             *out_idx = start;
             break;
