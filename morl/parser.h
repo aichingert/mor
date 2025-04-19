@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 typedef enum {
@@ -8,14 +9,17 @@ typedef enum {
 
     // symbols
     LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
+    COLON, DB_COLON, EQ_COLON, SEMI_COLON,
+    ARROW, STAR, DOT,
 
     // operations
-    PLUS, MINUS,
+    PLUS, MINUS, 
+    EQ, MINUS_EQ, PLUS_EQ,
 
     // keywords
     KW_STRUCT,
 
-    M_EOF,
+    M_EOF, M_UNKNOWN_SYMBOL,
 } token_tag;
 
 typedef enum {
@@ -73,7 +77,7 @@ typedef struct {
 } node;
 */
 
-tokens tokenize(char *source);
+bool tokenize(char *source, tokens *toks);
 
 //node* parse(token *tokens, size_t len);
 

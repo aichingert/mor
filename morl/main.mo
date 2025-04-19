@@ -1,9 +1,9 @@
 coord :: struct {
     x: f32;
-    y: f32;
+    y: f32 = 1.5;
 
     create :: () -> self {
-        return { .x = 0.5; .y = 1.5; };
+        return { x = 0.5; };
     }
 
     jump :: (*self) {

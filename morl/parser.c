@@ -44,18 +44,40 @@ tok_loop:
         }
 
         switch (src[idx]) {
-            case '+': 
-                kind = PLUS;
-                break;
+            case '+': kind = PLUS; break;
             case '-': 
-                kind = MINUS;
+                kind = MINUS; 
+                if (src[idx + 1] != '\0') {
+                    if (src[idx + 1] == '>') kind = ARROW;
+                    else if (src[idx + 1] == '=') kind = MINUS_EQ;
+
+                    if (kind != MINUS) idx++;
+                }
+                break;
+            case '*': kind = STAR; break;
+            case '=': kind = EQ; break;
+            case '.': kind = DOT; break;
+            case '(': kind = LPAREN; break;
+            case ')': kind = RPAREN; break;
+            case '{': kind = LBRACE; break;
+            case '}': kind = RBRACE; break;
+            case ';': kind = SEMI_COLON; break;
+            case ':':
+                kind = COLON;
+                if (src[idx + 1] != '\0') {
+                    if (src[idx + 1] == ':') kind = DB_COLON;
+                    else if (src[idx + 1] == '=') kind = EQ_COLON;
+
+                    if (kind != COLON) idx++;
+                }
                 break;
             case '\n': line++; [[fallthrough]];
             case ' ':
                 idx += 1;
                 *out_idx = idx;
                 goto tok_loop;
-            default: break;
+            default: 
+                return (token){0, 0, 0, M_UNKNOWN_SYMBOL};
         }
 
         if (kind != M_EOF) {
@@ -70,15 +92,21 @@ tok_loop:
     return tok;
 }
 
-tokens tokenize(char *src) {
+bool tokenize(char *src, tokens *toks) {
     size_t idx = 0;
     int line = 1;
-    tokens toks = {0};
 
     while (src[idx] != '\0') {
-        nob_da_append(&toks, next_token(src, &idx, &line));
+        token tok = next_token(src, &idx, &line);
+
+        if (tok.kind == M_UNKNOWN_SYMBOL) {
+            printf("FAILED AT SYMBOL: '%c' [line=%d]\n", src[idx], line);
+            return false;
+        }
+
+        nob_da_append(toks, tok);
     }
 
-    return toks;
+    return true;
 }
 
