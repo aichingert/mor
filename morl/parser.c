@@ -66,7 +66,7 @@ tok_loop:
                 kind = COLON;
                 if (src[idx + 1] != '\0') {
                     if (src[idx + 1] == ':') kind = DB_COLON;
-                    else if (src[idx + 1] == '=') kind = EQ_COLON;
+                    else if (src[idx + 1] == '=') kind = COLON_EQ;
 
                     if (kind != COLON) idx++;
                 }

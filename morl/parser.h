@@ -9,7 +9,7 @@ typedef enum {
 
     // symbols
     LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
-    COLON, DB_COLON, EQ_COLON, SEMI_COLON,
+    COLON, DB_COLON, COLON_EQ, SEMI_COLON,
     ARROW, STAR, DOT,
 
     // operations
@@ -22,12 +22,16 @@ typedef enum {
     M_EOF, M_UNKNOWN_SYMBOL,
 } token_tag;
 
-typedef enum {
-    // statements
-    STRUCT,
+typedef enum { 
+    UNA, BIN, CALL 
+} expr_tag;
 
-    // expressions
-    UNA, BIN,
+typedef enum {
+    BLOCK, DECLARE, ASSIGN,
+} stmt_tag;
+
+typedef enum {
+    STRUCT, FUNCTION, METHOD,
 } node_tag;
 
 typedef struct {
@@ -44,38 +48,66 @@ typedef struct {
     size_t capacity;
 } tokens;
 
-/*
-struct node;
-
 typedef struct {
-    node left;
-    node right;
-
+    struct expr *lhs;
     token_tag op;
+    struct expr *rhs;
 } bin;
 
 typedef struct {
-    node n;
+    struct epxr *ex;
     token_tag op;
 } una;
 
 typedef struct {
-    token ident;
-
-    // TODO: fields
-} struct_def;
+    struct expr *items;
+    size_t count;
+    size_t capacity;
+} exprs;
 
 typedef struct {
-    node_tag kind;
+    struct node *items;
+    size_t count;
+    size_t capacity;
+} stmts;
+
+typedef struct {
+    token ident;
+
+    exprs fields;
+    stmts methods;
+} m_struct;
+
+typedef struct {
+    expr_tag kind;
 
     union {
         una u_expr;
         bin b_expr;
+    };
+} expr;
 
-        struct_def s_stmt;
-    }
+typedef struct {
+    stmt_tag kind;
+
+    union {
+        /*
+        declare d;
+        function f;
+        */
+        m_struct s_stmt;
+    };
+} stmt;
+
+
+
+// NODE: a node holds every possible type statement
+// whereas a statement can be a function, declaration,
+// ...
+typedef struct {
+
+
 } node;
-*/
 
 bool tokenize(char *source, tokens *toks);
 

@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +28,8 @@ int main(int argc, char **argv) {
             return 1;
         }
 
+
+
         nob_da_foreach(token, i, &toks) {
             int x = i - toks.items;
             if (x > 0 && toks.items[x - 1].line != i->line) printf("\n");
@@ -36,21 +37,6 @@ int main(int argc, char **argv) {
             for (int s = i->start; s < i->end; s++) {
                 printf("%c", src.items[s]);
             }
-
-            /*
-            if (i->kind == NUMERAL) {
-                printf("numeral -> ");
-            } else if (i->kind == PLUS) {
-                printf("+ -> ");
-            } else if (i->kind == LITERAL) {
-                printf("lit -> ");
-            } else if (i->kind == M_EOF) {
-                printf("eof -> ");
-            } else if (i->kind == KW_STRUCT) {
-                printf("struct -> ");
-            }
-            printf("line: %u | from: %u - to: %u\n", i->line, i->start, i->end);
-            */
         }
     }
 
