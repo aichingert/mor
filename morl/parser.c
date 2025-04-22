@@ -111,6 +111,13 @@ bool tokenize(const char *src, tokens *toks) {
     return true;
 }
 
+void assert_kind(token expected, token_tag actual) {
+    if (expected.kind != actual) {
+        printf("\e[1;31mparse error:\e[0m on line = %d\n", expected.line);
+        exit(1);
+    }
+}
+
 bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
     // literal -> :  | =
     //               | type definition
@@ -118,6 +125,7 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
     //
     //         -> :: | struct
     //               | () 
+    //               | !future constants!
     //
     //         -> .  | literal 
     //               -> () | :: ()
@@ -126,6 +134,8 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
 
     // TODO: check out of bounds
     switch (vals[*pos + 1].kind) {
+        case COLON:
+
         case DB_COLON:
             if (vals[*pos + 2].kind != KW_STRUCT && vals[*pos + 2].kind != LPAREN) 
                 return false;
@@ -134,18 +144,24 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 m_struct s = { .ident = vals[*pos], .fields = {0}, .methods = {0}};
                 *pos += 3;
 
-                assert(vals[(*pos)++].kind == LBRACE);
+                assert_kind(vals[(*pos)++], LBRACE);
             } else {
 
             }
 
             return true;
         case DOT:
-            assert(vals[*pos + 2].kind == LITERAL);
-            assert(vals[*pos + 3].kind == DB_COLON);
+            if (vals[*pos + 2].kind != LITERAL 
+                    || (vals[*pos + 3].kind != LPAREN && vals[*pos + 3].kind != DB_COLON))
+                return false;
 
-            // TODO parse method
-            break;
+            if (vals[*pos + 3].kind == DB_COLON) {
+                // method
+            } else {
+                // function call
+            }
+
+            return false;
         default: return false;
     }
 
