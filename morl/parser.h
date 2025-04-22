@@ -9,8 +9,8 @@ typedef enum {
 
     // symbols
     LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
-    COLON, DB_COLON, COLON_EQ, SEMI_COLON,
-    ARROW, STAR, DOT,
+    COLON, DB_COLON, COLON_EQ, SEMI_COLON, 
+    COMMA, ARROW, STAR, DOT,
 
     // operations
     PLUS, MINUS, 
@@ -22,17 +22,33 @@ typedef enum {
     M_EOF, M_UNKNOWN_SYMBOL,
 } token_tag;
 
+typedef enum {
+    // primitives 
+    T_I32, 
+
+    // user defined
+    T_ANON_STRUCT, T_STRUCT,
+} m_type;
+
 typedef enum { 
-    UNA, BIN, CALL 
+    UNA, BIN, VAR, CALL
 } expr_tag;
 
 typedef enum {
-    BLOCK, DECLARE, ASSIGN,
+    FUNCTION, STRUCT, BLOCK, DECLARE, ASSIGN,
 } stmt_tag;
 
-typedef enum {
-    STRUCT, FUNCTION, METHOD,
-} node_tag;
+typedef struct {
+    struct expr *items;
+    size_t count;
+    size_t capacity;
+} exprs;
+
+typedef struct {
+    struct stmt *items;
+    size_t count;
+    size_t capacity;
+} stmts;
 
 typedef struct {
     int start;
@@ -60,16 +76,14 @@ typedef struct {
 } una;
 
 typedef struct {
-    struct expr *items;
-    size_t count;
-    size_t capacity;
-} exprs;
+    token ident;
+    m_type type;
 
-typedef struct {
-    struct node *items;
-    size_t count;
-    size_t capacity;
-} stmts;
+    union {
+        token *type_ident;
+        struct m_struct *str;
+    };
+} var;
 
 typedef struct {
     token ident;
@@ -84,6 +98,7 @@ typedef struct {
     union {
         una u_expr;
         bin b_expr;
+        var v_expr;
     };
 } expr;
 
@@ -95,22 +110,11 @@ typedef struct {
         declare d;
         function f;
         */
-        m_struct s_stmt;
+        m_struct *s_stmt;
     };
 } stmt;
 
-
-
-// NODE: a node holds every possible type statement
-// whereas a statement can be a function, declaration,
-// ...
-typedef struct {
-
-
-} node;
-
-bool tokenize(char *source, tokens *toks);
-
-//node* parse(token *tokens, size_t len);
+bool tokenize(const char *source, tokens *toks);
+bool parse(const char *source, const tokens *toks, stmts *nodes);
 
 #endif /* PARSER_H */

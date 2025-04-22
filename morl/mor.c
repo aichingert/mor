@@ -28,15 +28,10 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-
-
-        nob_da_foreach(token, i, &toks) {
-            int x = i - toks.items;
-            if (x > 0 && toks.items[x - 1].line != i->line) printf("\n");
-
-            for (int s = i->start; s < i->end; s++) {
-                printf("%c", src.items[s]);
-            }
+        stmts nodes = {0};
+        if (!parse(src.items, &toks, &nodes)) {
+            printf("morl: \e[1;31mfatal error:\e[0m failed to parse %s\n", argv[i]);
+            return 1;
         }
     }
 

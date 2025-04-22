@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,19 +8,18 @@
 #include "parser.h"
 
 bool is_literal(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
 }
 
 bool is_number(char c) {
     return c >= '0' && c <= '9';
 }
 
-token next_token(char *src, size_t *out_idx, int *out_line) {
+token next_token(const char *src, size_t *out_idx, int *out_line) {
     size_t idx = *out_idx;
     int line = *out_line;
     token_tag kind = M_EOF;
 
-tok_loop: 
     while (src[idx] != '\0') {
         if (is_literal(src[idx])) {
             kind = LITERAL;
@@ -61,6 +61,7 @@ tok_loop:
             case ')': kind = RPAREN; break;
             case '{': kind = LBRACE; break;
             case '}': kind = RBRACE; break;
+            case ',': kind = COMMA; break;
             case ';': kind = SEMI_COLON; break;
             case ':':
                 kind = COLON;
@@ -75,7 +76,7 @@ tok_loop:
             case ' ':
                 idx += 1;
                 *out_idx = idx;
-                goto tok_loop;
+                continue;
             default: 
                 return (token){0, 0, 0, M_UNKNOWN_SYMBOL};
         }
@@ -92,7 +93,7 @@ tok_loop:
     return tok;
 }
 
-bool tokenize(char *src, tokens *toks) {
+bool tokenize(const char *src, tokens *toks) {
     size_t idx = 0;
     int line = 1;
 
@@ -106,6 +107,77 @@ bool tokenize(char *src, tokens *toks) {
 
         nob_da_append(toks, tok);
     }
+
+    return true;
+}
+
+bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
+    // literal -> :  | =
+    //               | type definition
+    //               -> struct { | struct_name | 
+    //
+    //         -> :: | struct
+    //               | () 
+    //
+    //         -> .  | literal 
+    //               -> () | :: ()
+
+    const token *vals = toks->items;
+
+    // TODO: check out of bounds
+    switch (vals[*pos + 1].kind) {
+        case DB_COLON:
+            if (vals[*pos + 2].kind != KW_STRUCT && vals[*pos + 2].kind != LPAREN) 
+                return false;
+
+            if (vals[*pos + 2].kind == KW_STRUCT) {
+                m_struct s = { .ident = vals[*pos], .fields = {0}, .methods = {0}};
+                *pos += 3;
+
+                assert(vals[(*pos)++].kind == LBRACE);
+            } else {
+
+            }
+
+            return true;
+        case DOT:
+            assert(vals[*pos + 2].kind == LITERAL);
+            assert(vals[*pos + 3].kind == DB_COLON);
+
+            // TODO parse method
+            break;
+        default: return false;
+    }
+
+    return true;
+}
+
+bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
+    const token *vals = toks->items;
+
+    printf("%zu\n", *pos);
+
+    switch (vals[*pos].kind) {
+        case LITERAL: return parse_literal(source, toks, nodes, pos);
+        default:
+            printf("\e[1;31mparser error:\e[0m unable to parse token `");
+            for (int src = vals[*pos].start; src < vals[*pos].end; src++) {
+                printf("%c", source[src]);
+            }
+            printf("`\n");
+            return false;
+    }
+
+    printf("%d\n", toks->items[(*pos)++].line);
+    return true;
+}
+
+bool parse(const char *source, const tokens *toks, stmts *nodes) {
+    size_t pos = 0;
+
+    while (pos < toks->count)
+        if (!parse_stmt(source, toks, nodes, &pos)) 
+            return false;
 
     return true;
 }

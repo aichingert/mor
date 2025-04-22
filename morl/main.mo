@@ -1,19 +1,24 @@
 coord :: struct {
-    x: f32;
-    y: f32 = 1.5;
+    x: i32;
+    y: i32 = 1;
 
     create :: () -> self {
-        return { x = 0.5; };
+        return { x = 0; };
     }
 
     jump :: (*self) {
-        self.x += 20;
         self.y += 30;
     }
 }
 
+coord.get_with_offset :: (*self, offset: i32) -> self {
+    return { x = self.x + offset; y = self.y + offset; };
+}
+
 main :: () {
-    p := coord.create();
+    p : coord = coord.create();
+    o : coord = p.get_with_offset(30);
 
     p.jump();
+    o.jump();
 }
