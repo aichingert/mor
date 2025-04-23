@@ -17,7 +17,7 @@ typedef enum {
     EQ, MINUS_EQ, PLUS_EQ,
 
     // keywords
-    KW_STRUCT,
+    KW_STRUCT, KW_SELF,
 
     M_EOF, M_UNKNOWN_SYMBOL,
 } token_tag;
@@ -33,7 +33,7 @@ typedef enum {
 } m_type;
 
 typedef enum { 
-    UNA, BIN, VAR, CALL
+    INT, FLOAT, STR, UNA, BIN, VAR, CALL
 } expr_tag;
 
 typedef enum {
@@ -95,6 +95,7 @@ typedef struct expr {
         una *u_expr;
         bin *b_expr;
         var *v_expr;
+        token *t_expr;
     };
 } expr;
 
@@ -121,5 +122,6 @@ bool tokenize(const char *source, tokens *toks);
 
 bool parse(const char *source, const tokens *toks, stmts *nodes);
 bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos);
+expr* parse_expr(const tokens *toks, size_t *pos, char prec);
 
 #endif /* PARSER_H */

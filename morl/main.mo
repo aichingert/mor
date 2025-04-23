@@ -1,6 +1,6 @@
 coord :: struct {
     x: i32;
-    y: i32 = 1;
+    y: i32 = 1 + 1;
 
     init :: () -> self {
         return { x = 0; };

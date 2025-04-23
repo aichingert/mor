@@ -8,7 +8,11 @@
 #include "parser.h"
 
 bool is_literal(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_') || (c >= '0' && c <= '9');
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_'); 
+}
+
+bool is_alphanumeric(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_') || (c >= '0' && c <= '9'); 
 }
 
 bool is_number(char c) {
@@ -25,7 +29,7 @@ token next_token(const char *src, size_t *out_idx, int *out_line) {
             kind = LITERAL;
             size_t start = idx++;
 
-            while(src[idx] != '\0' && is_literal(src[idx])) idx++;
+            while(src[idx] != '\0' && is_alphanumeric(src[idx])) idx++;
 
             if (idx - start == 6 && strncmp(src + start, "struct", 6) == 0) kind = KW_STRUCT;
 
@@ -118,6 +122,26 @@ void assert_kind(token expected, token_tag actual) {
     }
 }
 
+bool is_bin_op(const tokens *toks, size_t *pos) {
+    if (*pos >= toks->count) return false;
+
+    token_tag kind = toks->items[*pos].kind;
+    return (kind == PLUS)
+        || (kind == MINUS);
+}
+
+char get_bin_prec(token tok) {
+    switch (tok.kind) {
+        case PLUS: 
+            return 10;
+        case MINUS: 
+            return 10;
+        default:
+            printf("\e[1;31mparse error:\e[0m no bin token on line = %d\n", tok.line);
+            exit(1);
+    }
+}
+
 m_type parse_type(const char *source, const token *toks, size_t *pos) {
     // : -> = , ; | T_INFER
     //   
@@ -137,16 +161,16 @@ m_type parse_type(const char *source, const token *toks, size_t *pos) {
     // primitives 
     int len = toks[*pos].end - toks[*pos].start;
 
-    if (len == 3 && strncmp(source + toks[*pos].start, "i32", 3) == 0) {
+    *pos += 1;
+    if (len == 3 && strncmp(source + toks[*pos - 1].start, "i32", 3) == 0) {
         return T_I32;
     }
 
-    if (toks[*pos + 1].kind != EQ && toks[*pos + 1].kind != SEMI_COLON) {
-        printf("error: expected one of `=` or `;` on line = %d\n", toks[*pos + 1].line);
+    if (toks[*pos].kind != EQ && toks[*pos].kind != SEMI_COLON) {
+        printf("error: expected one of `=` or `;` on line = %d\n", toks[*pos].line);
         exit(1);
     }
 
-    *pos += 2;
     return T_STRUCT;
 }
 
@@ -165,25 +189,35 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
     const token *vals = toks->items;
 
     // TODO: check out of bounds
-    switch (vals[*pos + 1].kind) {
+    *pos += 2;
+    switch (vals[*pos - 1].kind) {
         case COLON:
             var *v = (var*)malloc(sizeof(var));
-            v->ident = vals[*pos];
-            *pos += 2;
+            v->ident = vals[*pos - 2];
             v->type = parse_type(source, vals, pos);
 
-            if (v->type == T_I32) printf("hello world\n");
+            expr *e = (expr*)malloc(sizeof(expr));
+            e->kind = VAR;
+            e->v_expr = v;
 
-            return false;
+            if (vals[*pos].kind == SEMI_COLON) {
+                (*pos)++;
+                nob_da_append(nodes, ((stmt){ .kind = EXPR, .e = e}));
+                return true;
+            }
+
+            assert(EQ == vals[(*pos)++].kind);
+            e->v_expr->ex = parse_expr(toks, pos, 0);
+            assert(SEMI_COLON == vals[(*pos)++].kind);
+
+            return true;
         case DB_COLON:
-            if (vals[*pos + 2].kind != KW_STRUCT && vals[*pos + 2].kind != LPAREN) 
+            if (vals[*pos].kind != KW_STRUCT && vals[*pos].kind != LPAREN) 
                 return false;
 
-            if (vals[*pos + 2].kind == KW_STRUCT) {
-                m_struct *ms = (m_struct*)malloc(sizeof(m_struct));
-                ms->ident = vals[*pos];
-                *pos += 3;
-
+            if (vals[*pos].kind == KW_STRUCT) {
+                m_struct *ms = (m_struct*)calloc(1, sizeof(m_struct));
+                ms->ident = vals[(*pos)++ - 2];
                 assert_kind(vals[(*pos)++], LBRACE);
 
                 while (*pos < toks->count) {
@@ -197,16 +231,17 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                     if (!parse_stmt(source, toks, &ms->fields, pos)) return false;
                 }
             } else {
-
+                printf("functions \n");
+                return false;
             }
 
             return true;
         case DOT:
-            if (vals[*pos + 2].kind != LITERAL 
-                    || (vals[*pos + 3].kind != LPAREN && vals[*pos + 3].kind != DB_COLON))
+            if (vals[*pos].kind != LITERAL 
+                    || (vals[*pos + 1].kind != LPAREN && vals[*pos + 1].kind != DB_COLON))
                 return false;
 
-            if (vals[*pos + 3].kind == DB_COLON) {
+            if (vals[*pos + 1].kind == DB_COLON) {
                 // method
             } else {
                 // function call
@@ -217,6 +252,47 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
     }
 
     return true;
+}
+
+expr* parse_leading_expr(const tokens *toks, size_t *pos) {
+    expr *ex = (expr*)malloc(sizeof(expr));
+
+    // TODO: bounds checks
+    switch (toks->items[*pos].kind) {
+        case NUMERAL:
+            ex->kind = INT;
+            ex->t_expr = &toks->items[(*pos)++];
+            return ex;
+        case LITERAL:
+            printf("TODO: not implemented str expressions");
+            exit(1);
+        default:
+            printf("error: expected one of `(` or expression on line = %d\n", toks->items[*pos].line);
+            exit(1);
+    }
+}
+
+expr* parse_expr(const tokens *toks, size_t *pos, char prec) {
+    expr *ex = parse_leading_expr(toks, pos);
+
+    while (toks->items[*pos].kind != M_EOF) {
+        if (is_bin_op(toks, pos) && get_bin_prec(toks->items[*pos]) >= prec) {
+            bin *b = (bin*)malloc(sizeof(bin));
+            b->lhs = ex;
+            b->op = toks->items[*pos].kind;
+            b->rhs = parse_expr(toks, pos, get_bin_prec(toks->items[(*pos)++]));
+
+            expr *e = (expr*)malloc(sizeof(expr));
+            e->kind = BIN;
+            e->b_expr = b;
+            ex = e;
+            continue;
+        }
+
+        break;
+    }
+
+    return ex;
 }
 
 bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
