@@ -17,7 +17,9 @@ typedef enum {
     EQ, MINUS_EQ, PLUS_EQ,
 
     // keywords
-    KW_STRUCT, KW_SELF,
+    KW_SELF,
+    KW_STRUCT, 
+    KW_RETURN,
 
     M_EOF, M_UNKNOWN_SYMBOL,
 } token_tag;
@@ -83,7 +85,7 @@ typedef struct var {
     struct expr *ex;
 
     union {
-        token *type_ident;
+        token type_ident;
         struct m_struct *str;
     };
 } var;
@@ -104,16 +106,21 @@ typedef struct m_struct {
     stmts fields;
 } m_struct;
 
+typedef struct m_func {
+    token ident;
+
+    exprs params;
+    stmts body;
+    expr *return_type;
+} m_func;
+
 typedef struct stmt {
     stmt_tag kind;
 
     union {
-        /*
-        declare d;
-        function f;
-        */
-
         expr     *e;
+        m_func   *f;
+        stmts    *b; // <- BLOCK
         m_struct *s;
     };
 } stmt;

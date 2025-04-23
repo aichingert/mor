@@ -32,6 +32,7 @@ token next_token(const char *src, size_t *out_idx, int *out_line) {
             while(src[idx] != '\0' && is_alphanumeric(src[idx])) idx++;
 
             if (idx - start == 6 && strncmp(src + start, "struct", 6) == 0) kind = KW_STRUCT;
+            if (idx - start == 6 && strncmp(src + start, "return", 6) == 0) kind = KW_RETURN;
 
             *out_idx = start;
             break;
@@ -142,7 +143,7 @@ char get_bin_prec(token tok) {
     }
 }
 
-m_type parse_type(const char *source, const token *toks, size_t *pos) {
+bool parse_type(const char *source, const token *toks, size_t *pos, expr *ex) {
     // : -> = , ; | T_INFER
     //   
     //   -> struct | TODO: struct { ... } 
@@ -150,28 +151,40 @@ m_type parse_type(const char *source, const token *toks, size_t *pos) {
     //   -> literal | = , ;
 
     if (toks[*pos].kind == EQ || toks[*pos].kind == SEMI_COLON) {
-        return T_INFER;
+        ex->v_expr->type = T_INFER;
+        return true;
     }
 
     if (toks[*pos].kind == KW_STRUCT) {
         printf("FATAL: compiler does not support anonymous structs\n");
-        exit(1);
+        return false;
     }
 
     // primitives 
     int len = toks[*pos].end - toks[*pos].start;
 
-    *pos += 1;
-    if (len == 3 && strncmp(source + toks[*pos - 1].start, "i32", 3) == 0) {
-        return T_I32;
+    if (len == 3 && strncmp(source + toks[*pos].start, "i32", 3) == 0) {
+        ex->v_expr->type = T_I32;
+        ex->v_expr->type_ident = toks[(*pos)++];
+        return true;
     }
 
-    if (toks[*pos].kind != EQ && toks[*pos].kind != SEMI_COLON) {
-        printf("error: expected one of `=` or `;` on line = %d\n", toks[*pos].line);
-        exit(1);
-    }
+    ex->v_expr->type = T_STRUCT;
+    ex->v_expr->type_ident = toks[(*pos)++];
+    return true;
+}
 
-    return T_STRUCT;
+bool parse_block(const char *source, const tokens *toks, stmts *block, size_t *pos) {
+    if (*pos + 1 >= toks->count) return false;
+
+    assert_kind(toks->items[(*pos)++], LBRACE);
+
+    while (*pos < toks->count && toks->items[*pos].kind != RBRACE)
+        if (!parse_stmt(source, toks, block, pos)) 
+            return false;
+
+    assert_kind(toks->items[(*pos)++], RBRACE);
+    return true;
 }
 
 bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
@@ -192,13 +205,17 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
     *pos += 2;
     switch (vals[*pos - 1].kind) {
         case COLON:
-            var *v = (var*)malloc(sizeof(var));
-            v->ident = vals[*pos - 2];
-            v->type = parse_type(source, vals, pos);
-
             expr *e = (expr*)malloc(sizeof(expr));
             e->kind = VAR;
-            e->v_expr = v;
+            e->v_expr = (var*)calloc(1, sizeof(var));
+            e->v_expr->ident = vals[*pos - 2];
+
+            if (!parse_type(source, vals, pos, e)) return false;
+
+            if (vals[*pos].kind != EQ && vals[*pos].kind != SEMI_COLON) {
+                printf("error: expected one of `=` or `;` on line = %d\n", vals[*pos].line);
+                return false;
+            }
 
             if (vals[*pos].kind == SEMI_COLON) {
                 (*pos)++;
@@ -231,7 +248,26 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                     if (!parse_stmt(source, toks, &ms->fields, pos)) return false;
                 }
             } else {
-                printf("functions \n");
+                m_func *fn = (m_func*)calloc(1, sizeof(m_func));
+                fn->ident = vals[*pos - 2];
+
+                assert_kind(vals[(*pos)++], LPAREN);
+                assert_kind(vals[(*pos)++], RPAREN);
+
+                if (vals[*pos].kind == ARROW) {
+                    expr *e = (expr*)malloc(sizeof(expr));
+                    e->kind = VAR;
+                    *pos += 1;
+
+                    if (!parse_type(source, vals, pos, e)) 
+                        return false;
+                }
+
+                if (!parse_block(source, toks, &fn->body, pos))
+                    return false;
+
+                printf("functions line = %d\n", vals[*pos].line);
+
                 return false;
             }
 
@@ -301,7 +337,11 @@ bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *po
     printf("%zu\n", *pos);
 
     switch (vals[*pos].kind) {
-        case LITERAL: return parse_literal(source, toks, nodes, pos);
+        case LITERAL: 
+            return parse_literal(source, toks, nodes, pos);
+        case KW_RETURN:
+            // TODO: implement return statement
+            exit(1);
         default:
             printf("\e[1;31mparser error:\e[0m unable to parse token `");
             for (int src = vals[*pos].start; src < vals[*pos].end; src++) {
