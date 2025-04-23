@@ -2,7 +2,7 @@ coord :: struct {
     x: i32;
     y: i32 = 1;
 
-    create :: () -> self {
+    init :: () -> self {
         return { x = 0; };
     }
 

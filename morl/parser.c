@@ -8,7 +8,7 @@
 #include "parser.h"
 
 bool is_literal(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_');
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_') || (c >= '0' && c <= '9');
 }
 
 bool is_number(char c) {
@@ -118,6 +118,38 @@ void assert_kind(token expected, token_tag actual) {
     }
 }
 
+m_type parse_type(const char *source, const token *toks, size_t *pos) {
+    // : -> = , ; | T_INFER
+    //   
+    //   -> struct | TODO: struct { ... } 
+    //
+    //   -> literal | = , ;
+
+    if (toks[*pos].kind == EQ || toks[*pos].kind == SEMI_COLON) {
+        return T_INFER;
+    }
+
+    if (toks[*pos].kind == KW_STRUCT) {
+        printf("FATAL: compiler does not support anonymous structs\n");
+        exit(1);
+    }
+
+    // primitives 
+    int len = toks[*pos].end - toks[*pos].start;
+
+    if (len == 3 && strncmp(source + toks[*pos].start, "i32", 3) == 0) {
+        return T_I32;
+    }
+
+    if (toks[*pos + 1].kind != EQ && toks[*pos + 1].kind != SEMI_COLON) {
+        printf("error: expected one of `=` or `;` on line = %d\n", toks[*pos + 1].line);
+        exit(1);
+    }
+
+    *pos += 2;
+    return T_STRUCT;
+}
+
 bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
     // literal -> :  | =
     //               | type definition
@@ -135,16 +167,35 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
     // TODO: check out of bounds
     switch (vals[*pos + 1].kind) {
         case COLON:
+            var *v = (var*)malloc(sizeof(var));
+            v->ident = vals[*pos];
+            *pos += 2;
+            v->type = parse_type(source, vals, pos);
 
+            if (v->type == T_I32) printf("hello world\n");
+
+            return false;
         case DB_COLON:
             if (vals[*pos + 2].kind != KW_STRUCT && vals[*pos + 2].kind != LPAREN) 
                 return false;
 
             if (vals[*pos + 2].kind == KW_STRUCT) {
-                m_struct s = { .ident = vals[*pos], .fields = {0}, .methods = {0}};
+                m_struct *ms = (m_struct*)malloc(sizeof(m_struct));
+                ms->ident = vals[*pos];
                 *pos += 3;
 
                 assert_kind(vals[(*pos)++], LBRACE);
+
+                while (*pos < toks->count) {
+                    if (vals[*pos].kind == RBRACE) {
+                        (*pos)++;
+
+                        nob_da_append(nodes, ((stmt){ .kind = STRUCT, .s = ms }));
+                        return true;
+                    }
+
+                    if (!parse_stmt(source, toks, &ms->fields, pos)) return false;
+                }
             } else {
 
             }

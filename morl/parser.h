@@ -28,6 +28,8 @@ typedef enum {
 
     // user defined
     T_ANON_STRUCT, T_STRUCT,
+
+    T_INFER,
 } m_type;
 
 typedef enum { 
@@ -35,20 +37,8 @@ typedef enum {
 } expr_tag;
 
 typedef enum {
-    FUNCTION, STRUCT, BLOCK, DECLARE, ASSIGN,
+    FUNCTION, STRUCT, BLOCK, EXPR,
 } stmt_tag;
-
-typedef struct {
-    struct expr *items;
-    size_t count;
-    size_t capacity;
-} exprs;
-
-typedef struct {
-    struct stmt *items;
-    size_t count;
-    size_t capacity;
-} stmts;
 
 typedef struct {
     int start;
@@ -58,26 +48,39 @@ typedef struct {
     token_tag kind;
 } token;
 
-typedef struct {
+typedef struct tokens {
     token *items;
     size_t count;
     size_t capacity;
 } tokens;
 
-typedef struct {
+typedef struct exprs {
+    struct expr *items;
+    size_t count;
+    size_t capacity;
+} exprs;
+
+typedef struct stmts {
+    struct stmt *items;
+    size_t count;
+    size_t capacity;
+} stmts;
+
+typedef struct bin {
     struct expr *lhs;
     token_tag op;
     struct expr *rhs;
 } bin;
 
-typedef struct {
+typedef struct una {
     struct epxr *ex;
     token_tag op;
 } una;
 
-typedef struct {
+typedef struct var {
     token ident;
     m_type type;
+    struct expr *ex;
 
     union {
         token *type_ident;
@@ -85,24 +88,22 @@ typedef struct {
     };
 } var;
 
-typedef struct {
-    token ident;
-
-    exprs fields;
-    stmts methods;
-} m_struct;
-
-typedef struct {
+typedef struct expr {
     expr_tag kind;
 
     union {
-        una u_expr;
-        bin b_expr;
-        var v_expr;
+        una *u_expr;
+        bin *b_expr;
+        var *v_expr;
     };
 } expr;
 
-typedef struct {
+typedef struct m_struct {
+    token ident;
+    stmts fields;
+} m_struct;
+
+typedef struct stmt {
     stmt_tag kind;
 
     union {
@@ -110,11 +111,15 @@ typedef struct {
         declare d;
         function f;
         */
-        m_struct *s_stmt;
+
+        expr     *e;
+        m_struct *s;
     };
 } stmt;
 
 bool tokenize(const char *source, tokens *toks);
+
 bool parse(const char *source, const tokens *toks, stmts *nodes);
+bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos);
 
 #endif /* PARSER_H */
