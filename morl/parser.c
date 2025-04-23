@@ -32,7 +32,7 @@ token next_token(const char *src, size_t *out_idx, int *out_line) {
             while(src[idx] != '\0' && is_alphanumeric(src[idx])) idx++;
 
             if (idx - start == 6 && strncmp(src + start, "struct", 6) == 0) kind = KW_STRUCT;
-            if (idx - start == 6 && strncmp(src + start, "return", 6) == 0) kind = KW_RETURN;
+            else if (idx - start == 6 && strncmp(src + start, "return", 6) == 0) kind = KW_RETURN;
 
             *out_idx = start;
             break;
