@@ -118,7 +118,7 @@ bool tokenize(const char *src, tokens *toks) {
 
 void assert_kind(token expected, token_tag actual) {
     if (expected.kind != actual) {
-        printf("\e[1;31mparse error:\e[0m on line = %d\n", expected.line);
+        printf("\e[1;31mparse error:\e[0m on line = %d | kind = %d\n", expected.line, actual);
         exit(1);
     }
 }
@@ -162,6 +162,7 @@ bool parse_type(const char *source, const token *toks, size_t *pos, expr *ex) {
         return true;
     }
 
+    printf("%d\n", ex->v_expr == NULL);
     ex->v_expr->type = T_STRUCT;
     ex->v_expr->type_ident = toks[(*pos)++];
     return true;
@@ -252,6 +253,7 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 if (vals[*pos].kind == ARROW) {
                     expr *e = (expr*)calloc(1, sizeof(expr));
                     e->kind = VAR;
+                    e->v_expr = (var*)malloc(sizeof(var));
                     *pos += 1;
 
                     if (!parse_type(source, vals, pos, e)) 
@@ -301,6 +303,34 @@ expr* parse_leading_expr(const tokens *toks, size_t *pos) {
         case LITERAL:
             printf("TODO: not implemented str expressions");
             exit(1);
+        case DOT:
+            // { [LITERAL = expr [, [*]]] }
+
+            *pos += 1;
+            ex->kind = DECL;
+            ex->expres = (exprs*)calloc(1, sizeof(exprs));
+
+            assert_kind(toks->items[(*pos)++], LBRACE);
+
+            while (*pos < toks->count && toks->items[*pos].kind == LITERAL) {
+                var *v = (var*)malloc(sizeof(var));
+
+                assert_kind(toks->items[*pos], LITERAL);
+                v->ident = toks->items[(*pos)++];
+                assert_kind(toks->items[(*pos)++], EQ);
+                v->ex = parse_expr(toks, pos, 0);
+
+                nob_da_append(ex->expres, ((expr){ .kind = VAR, .v_expr = v }));
+
+                if (toks->items[*pos].kind != COMMA) break;
+                *pos += 1;
+            }
+
+            assert_kind(toks->items[(*pos)++], RBRACE);
+            return ex;
+        case LBRACE:
+            printf("TODO: block expression\n");
+            exit(1);
         default:
             printf("error: expected one of `(` or expression on line = %d\n", toks->items[*pos].line);
             exit(1);
@@ -339,14 +369,9 @@ bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *po
         case LITERAL: 
             return parse_literal(source, toks, nodes, pos);
         case KW_RETURN:
-            printf("\e[1;31mTODO\e[0m: ret %d\n", nodes == NULL);
-            stmt *s = (stmt*)calloc(1, sizeof(stmt));
-            //s->kind = RETURN;
-            //s->e = parse_expr(toks, pos, 0);
-
-            // TODO: implement return statement
-            printf("\e[1;31mTODO\e[0m: ret\n");
-            //nob_da_append(nodes, ((stmt){ .kind = RETURN, .e = parse_expr(toks, pos, 0)}));
+            *pos += 1;
+            nob_da_append(nodes, ((stmt){ .kind = RETURN, .e = parse_expr(toks, pos, 0)}));
+            assert_kind(toks->items[(*pos)++], SEMI_COLON);
             return true;
         default:
             printf("\e[1;31mparser error:\e[0m unable to parse token `");

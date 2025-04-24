@@ -35,7 +35,7 @@ typedef enum {
 } m_type;
 
 typedef enum { 
-    INT, FLOAT, STR, UNA, BIN, VAR, CALL
+    INT, FLOAT, STR, UNA, BIN, VAR, CALL, DECL,
 } expr_tag;
 
 typedef enum {
@@ -98,6 +98,7 @@ typedef struct expr {
         bin *b_expr;
         var *v_expr;
         token *t_expr;
+        exprs *expres;
     };
 } expr;
 

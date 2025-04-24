@@ -3,7 +3,7 @@ coord :: struct {
     y: i32 = 1 + 1;
 
     init :: () -> self {
-        return { x = 0; };
+        return .{ x = 0 };
     }
 
     jump :: (*self) {
@@ -12,7 +12,11 @@ coord :: struct {
 }
 
 coord.get_with_offset :: (*self, offset: i32) -> self {
-    return { x = self.x + offset; y = self.y + offset; };
+    return .{ x = self.x + offset, y = self.y + offset };
+}
+
+coord.value :: () -> i32 {
+    return { 10 };
 }
 
 main :: () {
