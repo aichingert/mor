@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
 
     Nob_Cmd cmd = {0};
 
-    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-fsanitize=address,undefined", "-g", "-o", BUILD_FOLDER"mor", SRC_FOLDER"mor.c");
+    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", /*"-fsanitize=address,undefined", "-g",*/ "-o", BUILD_FOLDER"mor", SRC_FOLDER"mor.c");
 
     nob_cc_flags(&cmd);
     nob_cc_inputs(&cmd, SRC_FOLDER"parser.c");

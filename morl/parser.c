@@ -248,6 +248,27 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 fn->ident = vals[*pos - 2];
 
                 assert_kind(vals[(*pos)++], LPAREN);
+
+                if (vals[*pos].kind == STAR || vals[*pos].kind == KW_SELF) {
+                    m_type t = T_SELF;
+
+                    if (vals[*pos].kind == STAR) {
+                        t = T_SELF_PTR;
+                        *pos += 1;
+                    }
+
+                    var *v = (var*)calloc(1, sizeof(var));
+                    v->type = t;
+
+                    nob_da_append(&fn->params, ((expr){ .kind = VAR, .v_expr = v}));
+                    assert_kind(vals[(*pos)++], KW_SELF);
+                }
+
+                while (*pos < toks->count && vals[*pos].kind != LPAREN) {
+                    break;
+                }
+
+
                 assert_kind(vals[(*pos)++], RPAREN);
 
                 if (vals[*pos].kind == ARROW) {
@@ -260,16 +281,7 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                         return false;
                 }
 
-                printf("hello\n");
-                if (!parse_block(source, toks, &fn->body, pos)) {
-                    printf("ARGH\n");
-                    return false;
-                }
-
-                printf("ARGH\n");
-                printf("functions line = %d\n", vals[*pos].line);
-
-                return false;
+                return parse_block(source, toks, &fn->body, pos);
             }
 
             return true;
@@ -363,8 +375,6 @@ expr* parse_expr(const tokens *toks, size_t *pos, char prec) {
 bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
     const token *vals = toks->items;
 
-    printf("%zu\n", *pos);
-
     switch (vals[*pos].kind) {
         case LITERAL: 
             return parse_literal(source, toks, nodes, pos);
@@ -382,7 +392,7 @@ bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *po
             return false;
     }
 
-    printf("%d\n", toks->items[(*pos)++].line);
+    printf("stmt on line = %d okay\n", toks->items[(*pos)++].line);
     return true;
 }
 

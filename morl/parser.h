@@ -31,6 +31,8 @@ typedef enum {
     // user defined
     T_ANON_STRUCT, T_STRUCT,
 
+    T_SELF, T_SELF_PTR,
+
     T_INFER,
 } m_type;
 
