@@ -144,16 +144,9 @@ char get_bin_prec(token tok) {
 }
 
 bool parse_type(const char *source, const token *toks, size_t *pos, expr *ex) {
-    // : -> = , ; | T_INFER
-    //   
     //   -> struct | TODO: struct { ... } 
     //
     //   -> literal | = , ;
-
-    if (toks[*pos].kind == EQ || toks[*pos].kind == SEMI_COLON) {
-        ex->v_expr->type = T_INFER;
-        return true;
-    }
 
     if (toks[*pos].kind == KW_STRUCT) {
         printf("FATAL: compiler does not support anonymous structs\n");
@@ -205,12 +198,13 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
     *pos += 2;
     switch (vals[*pos - 1].kind) {
         case COLON:
-            expr *e = (expr*)malloc(sizeof(expr));
+            expr *e = (expr*)calloc(1, sizeof(expr));
             e->kind = VAR;
             e->v_expr = (var*)calloc(1, sizeof(var));
             e->v_expr->ident = vals[*pos - 2];
 
-            if (!parse_type(source, vals, pos, e)) return false;
+            if (vals[*pos].kind == EQ || vals[*pos].kind == SEMI_COLON) e->v_expr->type = T_INFER;
+            else if (!parse_type(source, vals, pos, e)) return false;
 
             if (vals[*pos].kind != EQ && vals[*pos].kind != SEMI_COLON) {
                 printf("error: expected one of `=` or `;` on line = %d\n", vals[*pos].line);
@@ -235,6 +229,7 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
             if (vals[*pos].kind == KW_STRUCT) {
                 m_struct *ms = (m_struct*)calloc(1, sizeof(m_struct));
                 ms->ident = vals[(*pos)++ - 2];
+                ms->fields = (stmts){ .items = NULL, .count = 0, .capacity = 0, };
                 assert_kind(vals[(*pos)++], LBRACE);
 
                 while (*pos < toks->count) {
@@ -255,7 +250,7 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 assert_kind(vals[(*pos)++], RPAREN);
 
                 if (vals[*pos].kind == ARROW) {
-                    expr *e = (expr*)malloc(sizeof(expr));
+                    expr *e = (expr*)calloc(1, sizeof(expr));
                     e->kind = VAR;
                     *pos += 1;
 
@@ -263,9 +258,13 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                         return false;
                 }
 
-                if (!parse_block(source, toks, &fn->body, pos))
+                printf("hello\n");
+                if (!parse_block(source, toks, &fn->body, pos)) {
+                    printf("ARGH\n");
                     return false;
+                }
 
+                printf("ARGH\n");
                 printf("functions line = %d\n", vals[*pos].line);
 
                 return false;
@@ -291,7 +290,7 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
 }
 
 expr* parse_leading_expr(const tokens *toks, size_t *pos) {
-    expr *ex = (expr*)malloc(sizeof(expr));
+    expr *ex = (expr*)calloc(1, sizeof(expr));
 
     // TODO: bounds checks
     switch (toks->items[*pos].kind) {
@@ -313,12 +312,12 @@ expr* parse_expr(const tokens *toks, size_t *pos, char prec) {
 
     while (toks->items[*pos].kind != M_EOF) {
         if (is_bin_op(toks, pos) && get_bin_prec(toks->items[*pos]) >= prec) {
-            bin *b = (bin*)malloc(sizeof(bin));
+            bin *b = (bin*)calloc(1, sizeof(bin));
             b->lhs = ex;
             b->op = toks->items[*pos].kind;
             b->rhs = parse_expr(toks, pos, get_bin_prec(toks->items[(*pos)++]));
 
-            expr *e = (expr*)malloc(sizeof(expr));
+            expr *e = (expr*)calloc(1, sizeof(expr));
             e->kind = BIN;
             e->b_expr = b;
             ex = e;
@@ -340,8 +339,15 @@ bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *po
         case LITERAL: 
             return parse_literal(source, toks, nodes, pos);
         case KW_RETURN:
+            printf("\e[1;31mTODO\e[0m: ret %d\n", nodes == NULL);
+            stmt *s = (stmt*)calloc(1, sizeof(stmt));
+            //s->kind = RETURN;
+            //s->e = parse_expr(toks, pos, 0);
+
             // TODO: implement return statement
-            exit(1);
+            printf("\e[1;31mTODO\e[0m: ret\n");
+            //nob_da_append(nodes, ((stmt){ .kind = RETURN, .e = parse_expr(toks, pos, 0)}));
+            return true;
         default:
             printf("\e[1;31mparser error:\e[0m unable to parse token `");
             for (int src = vals[*pos].start; src < vals[*pos].end; src++) {
@@ -362,6 +368,7 @@ bool parse(const char *source, const tokens *toks, stmts *nodes) {
         if (!parse_stmt(source, toks, nodes, &pos)) 
             return false;
 
+    printf("%zu\n", pos);
     return true;
 }
 

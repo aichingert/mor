@@ -39,7 +39,7 @@ typedef enum {
 } expr_tag;
 
 typedef enum {
-    FUNCTION, STRUCT, BLOCK, EXPR,
+    FUNCTION, STRUCT, BLOCK, EXPR, RETURN,
 } stmt_tag;
 
 typedef struct {
