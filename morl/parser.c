@@ -265,6 +265,9 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 }
 
                 while (*pos < toks->count && vals[*pos].kind != LPAREN) {
+                    printf("token %d\n", vals[*pos].kind);
+                    //assert_kind(vals[(*pos)++], COMMA);
+
                     break;
                 }
 
