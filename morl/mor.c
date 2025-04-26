@@ -5,6 +5,7 @@
 #define NOB_IMPLEMENTATION
 #include "nob.h"
 #include "parser.h"
+#include "types.h"
 
 char *SRC = NULL;
 
@@ -40,14 +41,11 @@ int main(int argc, char **argv) {
         printf("[INFO] compiling: %s\n", SRC);
 
         tokens toks = {0};
-        if (!tokenize(&toks)) {
-            printf("morl: \e[1;31mfatal error:\e[0m failed to tokenize %s\n", argv[i]);
-            return 1;
-        }
-
         stmts nodes = {0};
-        if (!parse(&toks, &nodes)) {
-            printf("morl: \e[1;31mfatal error:\e[0m failed to parse %s\n", argv[i]);
+
+        if (!tokenize(&toks) 
+                || !parse(&toks, &nodes)) {
+            printf("morl: \e[1;31mfatal error:\e[0m compilation of `%s` terminated\n", argv[i]);
             return 1;
         }
     }

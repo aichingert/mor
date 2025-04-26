@@ -134,7 +134,7 @@ void print_token(const token *tok) {
 void consume_and_assert(const tokens *toks, token_tag should_be, size_t *pos) {
     if (toks->items[*pos].kind != should_be) {
 
-        printf("\e[1;31mparse error:\e[0m found `");
+        printf("\e[1;31merror:\e[0m found `");
         print_token(&toks->items[*pos]);
         printf("` but expected %s on line %d\n", 
                 TOKEN_TAG[should_be], 
@@ -143,7 +143,7 @@ void consume_and_assert(const tokens *toks, token_tag should_be, size_t *pos) {
     }
 
     if (++(*pos) >= toks->count) {
-        printf("\e[1;31mparse error:\e[0m unexpected eof");
+        printf("\e[1;31merror:\e[0m unexpected eof");
         exit(1);
     }
 }
@@ -168,7 +168,7 @@ char get_bin_prec(const token *tok) {
         case MINUS: 
             return 10;
         default:
-            printf("\e[1;31mparse error:\e[0m expected binary operator but found `");
+            printf("\e[1;31merror:\e[0m expected binary operator but found `");
             print_token(tok);
             printf("` on line = %d\n", tok->line);
             exit(1);
@@ -188,10 +188,8 @@ bool parse_type(const token *toks, size_t *pos, expr *ex) {
     ex->v_expr->type = T_STRUCT;
     ex->v_expr->type_ident = toks[*pos];
     *pos += 1;
-    /*
     assert(((toks[*pos - 1].kind == KW_SELF) || (toks[*pos - 1].kind == LITERAL))
-            && "parse error: expected literal");
-    */
+            && "error: expected literal");
     return true;
 }
 
@@ -521,7 +519,7 @@ bool parse_stmt(const tokens *toks, stmts *nodes, size_t *pos) {
             *pos += 1;
             return true;
         default:
-            printf("\e[1;31mparser error:\e[0m unable to parse token `");
+            printf("\e[1;31merror:\e[0m unable to parse token `");
             print_token(&vals[*pos]);
             printf("` on line = %d\n", vals[*pos].line);
             return false;
