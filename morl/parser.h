@@ -59,11 +59,11 @@ typedef enum {
 } m_type;
 
 typedef enum { 
-    INT, FLOAT, STR, UNA, BIN, VAR, CALL, DECL,
+    INT, FLOAT, STR, UNA, BIN, VAR, STRUCT_VAR, CALL, DECL,
 } expr_tag;
 
 typedef enum {
-    FUNCTION, STRUCT, BLOCK, EXPR, RETURN,
+    FUNCTION, FUNC_CALL, STRUCT, BLOCK, EXPR, RETURN,
 } stmt_tag;
 
 typedef struct {
@@ -114,6 +114,12 @@ typedef struct var {
     };
 } var;
 
+typedef struct cal {
+    token *self;
+    token func;
+    exprs params;
+} cal;
+
 typedef struct expr {
     expr_tag kind;
 
@@ -121,6 +127,7 @@ typedef struct expr {
         una *u_expr;
         bin *b_expr;
         var *v_expr;
+        cal *c_expr;
         token *t_expr;
         exprs *expres;
     };
@@ -132,7 +139,7 @@ typedef struct m_struct {
 } m_struct;
 
 typedef struct m_func {
-    token *self; // if method of a struct
+    token self; // if method of a struct
     token ident;
 
     exprs params;

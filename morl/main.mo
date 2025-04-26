@@ -15,14 +15,15 @@ coord.get_with_offset :: (*self, offset: i32) -> self {
     return .{ x = self.x + offset, y = self.y + offset };
 }
 
-coord.value :: () -> i32 {
-    return { 10 };
+ret_code :: () -> i32 {
+    return 10;
 }
 
-main :: () {
+main :: () -> i32 {
     p : coord = coord.create();
     o : coord = p.get_with_offset(30);
 
     p.jump();
     o.jump();
+    return ret_code();
 }
