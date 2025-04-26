@@ -132,18 +132,17 @@ void print_token(const token *tok) {
 }
 
 void consume_and_assert(const tokens *toks, token_tag should_be, size_t *pos) {
-    if (toks->items[*pos].kind != should_be) {
-
-        printf("\e[1;31merror:\e[0m found `");
-        print_token(&toks->items[*pos]);
-        printf("` but expected %s on line %d\n", 
-                TOKEN_TAG[should_be], 
-                toks->items[*pos].line);
+    if (++(*pos) >= toks->count) {
+        printf("\e[1;31merror:\e[0m unexpected eof");
         exit(1);
     }
 
-    if (++(*pos) >= toks->count) {
-        printf("\e[1;31merror:\e[0m unexpected eof");
+    if (toks->items[*pos - 1].kind != should_be) {
+        printf("\e[1;31merror:\e[0m found `");
+        print_token(&toks->items[*pos - 1]);
+        printf("` but expected %s on line %d\n", 
+                TOKEN_TAG[should_be], 
+                toks->items[*pos - 1].line);
         exit(1);
     }
 }
