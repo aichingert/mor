@@ -55,7 +55,7 @@ token next_token(size_t *out_idx, int *out_line) {
         switch (SRC[idx]) {
             case '+': 
                 kind = PLUS; 
-                if (SRC[idx + 1] != '\0' && SRC[idx + 1] == EQ) {
+                if (SRC[idx + 1] != '\0' && SRC[idx + 1] == '=') {
                     idx++;
                     kind = PLUS_EQ;
                 }
@@ -215,6 +215,60 @@ bool parse_block(const tokens *toks, stmts *block, size_t *pos) {
     return true;
 }
 
+bool parse_func(const tokens *toks, stmts *nodes, size_t *pos) {
+    // self,
+    // literal 
+    // self.literal
+    // literal.literal 
+    // |-> :: ([params *[, params]]) [-> ret typ] 
+    //     { [block] }
+
+    const token *vals = toks->items;
+
+    m_func *fn = (m_func*)calloc(1, sizeof(m_func));
+    fn->ident = vals[*pos - 2];
+
+    consume_and_assert(toks, LPAREN, pos);
+
+    if (vals[*pos].kind == STAR || vals[*pos].kind == KW_SELF) {
+        m_type t = T_SELF;
+
+        if (vals[*pos].kind == STAR) {
+            t = T_PTR_SELF;
+            *pos += 1;
+        }
+
+        var *v = (var*)calloc(1, sizeof(var));
+        v->type = t;
+
+        nob_da_append(&fn->params, ((expr){ .kind = VAR, .v_expr = v}));
+        consume_and_assert(toks, KW_SELF, pos);
+    }
+
+    while (*pos < toks->count && vals[*pos].kind != RPAREN) {
+        print_token(&vals[*pos]);
+        printf(" param list\n");
+        break;
+    }
+
+    consume_and_assert(toks, RPAREN, pos);
+
+    if (vals[*pos].kind == ARROW) {
+        *pos += 1;
+        expr *e = (expr*)calloc(1, sizeof(expr));
+        e->kind = VAR;
+        e->v_expr = (var*)malloc(sizeof(var));
+
+        // EXPR -> since return type could be 
+        // a future tuple \o/
+        if (!parse_type(vals, pos, e)) 
+            return false;
+    }
+
+    nob_da_append(nodes, ((stmt){ .kind = FUNCTION, .f = fn}));
+    return parse_block(toks, &fn->body, pos);
+}
+
 bool parse_literal(const tokens *toks, stmts *nodes, size_t *pos) {
     // self,
     // literal -> :  | =
@@ -282,46 +336,7 @@ bool parse_literal(const tokens *toks, stmts *nodes, size_t *pos) {
                     if (!parse_stmt(toks, &ms->fields, pos)) return false;
                 }
             } else {
-                m_func *fn = (m_func*)calloc(1, sizeof(m_func));
-                fn->ident = vals[*pos - 2];
-
-                consume_and_assert(toks, LPAREN, pos);
-
-                if (vals[*pos].kind == STAR || vals[*pos].kind == KW_SELF) {
-                    m_type t = T_SELF;
-
-                    if (vals[*pos].kind == STAR) {
-                        t = T_SELF_PTR;
-                        *pos += 1;
-                    }
-
-                    var *v = (var*)calloc(1, sizeof(var));
-                    v->type = t;
-
-                    nob_da_append(&fn->params, ((expr){ .kind = VAR, .v_expr = v}));
-                    consume_and_assert(toks, KW_SELF, pos);
-                }
-
-                while (*pos < toks->count && vals[*pos].kind != RPAREN) {
-                    printf("token %d\n", vals[*pos].kind);
-                    //assert_kind(vals[(*pos)++], COMMA);
-
-                    break;
-                }
-
-                consume_and_assert(toks, RPAREN, pos);
-
-                if (vals[*pos].kind == ARROW) {
-                    expr *e = (expr*)calloc(1, sizeof(expr));
-                    e->kind = VAR;
-                    e->v_expr = (var*)malloc(sizeof(var));
-                    *pos += 1;
-
-                    if (!parse_type(vals, pos, e)) 
-                        return false;
-                }
-
-                return parse_block(toks, &fn->body, pos);
+                
             }
 
             return true;
@@ -334,15 +349,22 @@ bool parse_literal(const tokens *toks, stmts *nodes, size_t *pos) {
             //  |-> ASSIGN
 
             print_token(&vals[*pos]);
-            if (vals[*pos].kind == DB_COLON) {
-                printf(" this bucked\n");
-            } else if (vals[*pos].kind == LPAREN) {
-                printf(" this bucked\n");
-            } else if (is_assign_op(&vals[*pos])) {
-                printf(" this bucked\n");
-            }
 
-            return false;
+            if (vals[*pos].kind == DB_COLON) {
+                printf("should be here\n");
+
+            } else if (vals[*pos].kind == LPAREN) {
+            } else if (is_assign_op(&vals[*pos])) {
+                *pos += 1;
+                expr *e = (expr*)calloc(1, sizeof(expr));
+                e->kind = VAR;
+                e->v_expr = (var*)calloc(1, sizeof(var));
+                e->v_expr->ex    = parse_expr(toks, pos, 0);
+                e->v_expr->type  = T_SELF;
+                e->v_expr->ident = vals[*pos - 2];
+                consume_and_assert(toks, SEMI_COLON, pos);
+                return true;
+            } [[fallthrough]];
         default: return false;
     }
 
@@ -353,6 +375,8 @@ expr* parse_leading_expr(const tokens *toks, size_t *pos) {
     expr *ex = (expr*)calloc(1, sizeof(expr));
 
     // TODO: bounds checks
+    print_token(&toks->items[*pos]);
+    printf("\n");
     switch (toks->items[*pos].kind) {
         case NUMERAL:
             ex->kind = INT;
@@ -446,10 +470,9 @@ bool parse(const tokens *toks, stmts *nodes) {
     size_t pos = 0;
 
     while (pos < toks->count)
-        if (!parse_stmt(toks, nodes, &pos)) 
+        if (!parse_stmt(toks, nodes, &pos))
             return false;
 
-    printf("%zu\n", pos);
     return true;
 }
 

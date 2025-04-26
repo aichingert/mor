@@ -46,28 +46,6 @@ typedef enum token_tag {
     FOREACH_TOKEN(GENERATE_STRING)
 };
 
-/*
-typedef enum {
-    LITERAL, NUMERAL,
-
-    // symbols
-    LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
-    COLON, DB_COLON, COLON_EQ, SEMI_COLON, 
-    COMMA, ARROW, STAR, DOT,
-
-    // operations
-    PLUS, MINUS, 
-    EQ, MINUS_EQ, PLUS_EQ,
-
-    // keywords
-    KW_SELF,
-    KW_STRUCT, 
-    KW_RETURN,
-
-    M_EOF, M_UNKNOWN_SYMBOL,
-} token_tag;
-*/
-
 typedef enum {
     // primitives 
     T_I32, 
@@ -75,7 +53,7 @@ typedef enum {
     // user defined
     T_ANON_STRUCT, T_STRUCT,
 
-    T_SELF, T_SELF_PTR,
+    T_SELF, T_PTR_SELF,
 
     T_INFER,
 } m_type;
@@ -154,6 +132,7 @@ typedef struct m_struct {
 } m_struct;
 
 typedef struct m_func {
+    token *self; // if method of a struct
     token ident;
 
     exprs params;
