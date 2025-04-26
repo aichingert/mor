@@ -20,7 +20,7 @@ coord.value :: () -> i32 {
 }
 
 main :: () {
-    p : coord = coord::create();
+    p : coord = coord.create();
     o : coord = p.get_with_offset(30);
 
     p.jump();

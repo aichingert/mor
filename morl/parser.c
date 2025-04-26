@@ -19,42 +19,52 @@ bool is_number(char c) {
     return c >= '0' && c <= '9';
 }
 
-token next_token(const char *src, size_t *out_idx, int *out_line) {
+token next_token(size_t *out_idx, int *out_line) {
     size_t idx = *out_idx;
     int line = *out_line;
     token_tag kind = M_EOF;
 
-    while (src[idx] != '\0') {
-        if (is_literal(src[idx])) {
+    while (SRC[idx] != '\0') {
+        if (is_literal(SRC[idx])) {
             kind = LITERAL;
             size_t start = idx++;
 
-            while(src[idx] != '\0' && is_alphanumeric(src[idx])) idx++;
+            while(SRC[idx] != '\0' && is_alphanumeric(SRC[idx])) idx++;
 
-            if (idx - start == 6 && strncmp(src + start, "struct", 6) == 0) kind = KW_STRUCT;
-            else if (idx - start == 6 && strncmp(src + start, "return", 6) == 0) kind = KW_RETURN;
+            if (idx - start == 6 && strncmp(SRC + start, "struct", 6) == 0)
+                kind = KW_STRUCT;
+            else if (idx - start == 6 && strncmp(SRC + start, "return", 6) == 0)
+                kind = KW_RETURN;
+            else if (idx - start == 4 && strncmp(SRC + start, "self", 4) == 0)
+                kind = KW_SELF;
 
             *out_idx = start;
             break;
         }
 
-        if (is_number(src[idx])) {
+        if (is_number(SRC[idx])) {
             kind = NUMERAL;
             size_t start = idx++;
 
-            while (src[idx] != '\0' && is_number(src[idx])) idx++;
+            while (SRC[idx] != '\0' && is_number(SRC[idx])) idx++;
 
             *out_idx = start;
             break;
         }
 
-        switch (src[idx]) {
-            case '+': kind = PLUS; break;
+        switch (SRC[idx]) {
+            case '+': 
+                kind = PLUS; 
+                if (SRC[idx + 1] != '\0' && SRC[idx + 1] == EQ) {
+                    idx++;
+                    kind = PLUS_EQ;
+                }
+                break;
             case '-': 
                 kind = MINUS; 
-                if (src[idx + 1] != '\0') {
-                    if (src[idx + 1] == '>') kind = ARROW;
-                    else if (src[idx + 1] == '=') kind = MINUS_EQ;
+                if (SRC[idx + 1] != '\0') {
+                    if (SRC[idx + 1] == '>') kind = ARROW;
+                    else if (SRC[idx + 1] == '=') kind = MINUS_EQ;
 
                     if (kind != MINUS) idx++;
                 }
@@ -70,9 +80,9 @@ token next_token(const char *src, size_t *out_idx, int *out_line) {
             case ';': kind = SEMI_COLON; break;
             case ':':
                 kind = COLON;
-                if (src[idx + 1] != '\0') {
-                    if (src[idx + 1] == ':') kind = DB_COLON;
-                    else if (src[idx + 1] == '=') kind = COLON_EQ;
+                if (SRC[idx + 1] != '\0') {
+                    if (SRC[idx + 1] == ':') kind = DB_COLON;
+                    else if (SRC[idx + 1] == '=') kind = COLON_EQ;
 
                     if (kind != COLON) idx++;
                 }
@@ -83,7 +93,7 @@ token next_token(const char *src, size_t *out_idx, int *out_line) {
                 *out_idx = idx;
                 continue;
             default: 
-                return (token){0, 0, 0, M_UNKNOWN_SYMBOL};
+                return (token){0, 0, 0, M_UNKNOWN};
         }
 
         if (kind != M_EOF) {
@@ -98,15 +108,17 @@ token next_token(const char *src, size_t *out_idx, int *out_line) {
     return tok;
 }
 
-bool tokenize(const char *src, tokens *toks) {
+bool tokenize(tokens *toks) {
     size_t idx = 0;
     int line = 1;
 
-    while (src[idx] != '\0') {
-        token tok = next_token(src, &idx, &line);
+    if (SRC == NULL) printf("hmm\n");
 
-        if (tok.kind == M_UNKNOWN_SYMBOL) {
-            printf("FAILED AT SYMBOL: '%c' [line=%d]\n", src[idx], line);
+    while (SRC[idx] != '\0') {
+        token tok = next_token(&idx, &line);
+
+        if (tok.kind == M_UNKNOWN) {
+            printf("FAILED AT SYMBOL: '%c' [line=%d]\n", SRC[idx], line);
             return false;
         }
 
@@ -116,11 +128,31 @@ bool tokenize(const char *src, tokens *toks) {
     return true;
 }
 
-void assert_kind(token expected, token_tag actual) {
-    if (expected.kind != actual) {
-        printf("\e[1;31mparse error:\e[0m on line = %d | kind = %d\n", expected.line, actual);
+void print_token(const token *tok) {
+    for (int i = tok->start; i < tok->end; i++)
+        printf("%c", SRC[i]);
+}
+
+void consume_and_assert(const tokens *toks, token_tag should_be, size_t *pos) {
+    if (toks->items[*pos].kind != should_be) {
+
+        printf("\e[1;31mparse error:\e[0m found `");
+        print_token(&toks->items[*pos]);
+        printf("` but expected %s on line %d\n", 
+                TOKEN_TAG[should_be], 
+                toks->items[*pos].line);
         exit(1);
     }
+
+    if (++(*pos) >= toks->count) {
+        printf("\e[1;31mparse error:\e[0m unexpected eof");
+        exit(1);
+    }
+}
+
+bool is_assign_op(const token *toks) {
+    return toks->kind == EQ 
+        || toks->kind == PLUS_EQ;
 }
 
 bool is_bin_op(const tokens *toks, size_t *pos) {
@@ -131,19 +163,21 @@ bool is_bin_op(const tokens *toks, size_t *pos) {
         || (kind == MINUS);
 }
 
-char get_bin_prec(token tok) {
-    switch (tok.kind) {
+char get_bin_prec(const token *tok) {
+    switch (tok->kind) {
         case PLUS: 
             return 10;
         case MINUS: 
             return 10;
         default:
-            printf("\e[1;31mparse error:\e[0m no bin token on line = %d\n", tok.line);
+            printf("\e[1;31mparse error:\e[0m expected binary operator but found `");
+            print_token(tok);
+            printf("` on line = %d\n", tok->line);
             exit(1);
     }
 }
 
-bool parse_type(const char *source, const token *toks, size_t *pos, expr *ex) {
+bool parse_type(const token *toks, size_t *pos, expr *ex) {
     //   -> struct | TODO: struct { ... } 
     //
     //   -> literal | = , ;
@@ -156,7 +190,7 @@ bool parse_type(const char *source, const token *toks, size_t *pos, expr *ex) {
     // primitives 
     int len = toks[*pos].end - toks[*pos].start;
 
-    if (len == 3 && strncmp(source + toks[*pos].start, "i32", 3) == 0) {
+    if (len == 3 && strncmp(SRC + toks[*pos].start, "i32", 3) == 0) {
         ex->v_expr->type = T_I32;
         ex->v_expr->type_ident = toks[(*pos)++];
         return true;
@@ -168,20 +202,21 @@ bool parse_type(const char *source, const token *toks, size_t *pos, expr *ex) {
     return true;
 }
 
-bool parse_block(const char *source, const tokens *toks, stmts *block, size_t *pos) {
+bool parse_block(const tokens *toks, stmts *block, size_t *pos) {
     if (*pos + 1 >= toks->count) return false;
 
-    assert_kind(toks->items[(*pos)++], LBRACE);
+    consume_and_assert(toks, LBRACE, pos);
 
     while (*pos < toks->count && toks->items[*pos].kind != RBRACE)
-        if (!parse_stmt(source, toks, block, pos)) 
+        if (!parse_stmt(toks, block, pos)) 
             return false;
 
-    assert_kind(toks->items[(*pos)++], RBRACE);
+    consume_and_assert(toks, RBRACE, pos);
     return true;
 }
 
-bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
+bool parse_literal(const tokens *toks, stmts *nodes, size_t *pos) {
+    // self,
     // literal -> :  | =
     //               | type definition
     //               -> struct { | struct_name | 
@@ -204,8 +239,10 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
             e->v_expr = (var*)calloc(1, sizeof(var));
             e->v_expr->ident = vals[*pos - 2];
 
-            if (vals[*pos].kind == EQ || vals[*pos].kind == SEMI_COLON) e->v_expr->type = T_INFER;
-            else if (!parse_type(source, vals, pos, e)) return false;
+            if (vals[*pos].kind == EQ || vals[*pos].kind == SEMI_COLON) 
+                e->v_expr->type = T_INFER;
+            else if (!parse_type(vals, pos, e)) 
+                return false;
 
             if (vals[*pos].kind != EQ && vals[*pos].kind != SEMI_COLON) {
                 printf("error: expected one of `=` or `;` on line = %d\n", vals[*pos].line);
@@ -218,9 +255,9 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 return true;
             }
 
-            assert(EQ == vals[(*pos)++].kind);
+            consume_and_assert(toks, EQ, pos);
             e->v_expr->ex = parse_expr(toks, pos, 0);
-            assert(SEMI_COLON == vals[(*pos)++].kind);
+            consume_and_assert(toks, SEMI_COLON, pos);
 
             return true;
         case DB_COLON:
@@ -231,7 +268,8 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                 m_struct *ms = (m_struct*)calloc(1, sizeof(m_struct));
                 ms->ident = vals[(*pos)++ - 2];
                 ms->fields = (stmts){ .items = NULL, .count = 0, .capacity = 0, };
-                assert_kind(vals[(*pos)++], LBRACE);
+
+                consume_and_assert(toks, LBRACE, pos);
 
                 while (*pos < toks->count) {
                     if (vals[*pos].kind == RBRACE) {
@@ -241,13 +279,13 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                         return true;
                     }
 
-                    if (!parse_stmt(source, toks, &ms->fields, pos)) return false;
+                    if (!parse_stmt(toks, &ms->fields, pos)) return false;
                 }
             } else {
                 m_func *fn = (m_func*)calloc(1, sizeof(m_func));
                 fn->ident = vals[*pos - 2];
 
-                assert_kind(vals[(*pos)++], LPAREN);
+                consume_and_assert(toks, LPAREN, pos);
 
                 if (vals[*pos].kind == STAR || vals[*pos].kind == KW_SELF) {
                     m_type t = T_SELF;
@@ -261,18 +299,17 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                     v->type = t;
 
                     nob_da_append(&fn->params, ((expr){ .kind = VAR, .v_expr = v}));
-                    assert_kind(vals[(*pos)++], KW_SELF);
+                    consume_and_assert(toks, KW_SELF, pos);
                 }
 
-                while (*pos < toks->count && vals[*pos].kind != LPAREN) {
+                while (*pos < toks->count && vals[*pos].kind != RPAREN) {
                     printf("token %d\n", vals[*pos].kind);
                     //assert_kind(vals[(*pos)++], COMMA);
 
                     break;
                 }
 
-
-                assert_kind(vals[(*pos)++], RPAREN);
+                consume_and_assert(toks, RPAREN, pos);
 
                 if (vals[*pos].kind == ARROW) {
                     expr *e = (expr*)calloc(1, sizeof(expr));
@@ -280,23 +317,29 @@ bool parse_literal(const char *source, const tokens *toks, stmts *nodes, size_t 
                     e->v_expr = (var*)malloc(sizeof(var));
                     *pos += 1;
 
-                    if (!parse_type(source, vals, pos, e)) 
+                    if (!parse_type(vals, pos, e)) 
                         return false;
                 }
 
-                return parse_block(source, toks, &fn->body, pos);
+                return parse_block(toks, &fn->body, pos);
             }
 
             return true;
         case DOT:
-            if (vals[*pos].kind != LITERAL 
-                    || (vals[*pos + 1].kind != LPAREN && vals[*pos + 1].kind != DB_COLON))
-                return false;
+            consume_and_assert(toks, LITERAL, pos);
 
-            if (vals[*pos + 1].kind == DB_COLON) {
-                // method
-            } else {
-                // function call
+            // literal.literal 
+            //  |-> :: ()
+            //  |-> ()
+            //  |-> ASSIGN
+
+            print_token(&vals[*pos]);
+            if (vals[*pos].kind == DB_COLON) {
+                printf(" this bucked\n");
+            } else if (vals[*pos].kind == LPAREN) {
+                printf(" this bucked\n");
+            } else if (is_assign_op(&vals[*pos])) {
+                printf(" this bucked\n");
             }
 
             return false;
@@ -325,23 +368,23 @@ expr* parse_leading_expr(const tokens *toks, size_t *pos) {
             ex->kind = DECL;
             ex->expres = (exprs*)calloc(1, sizeof(exprs));
 
-            assert_kind(toks->items[(*pos)++], LBRACE);
+            consume_and_assert(toks, LBRACE, pos);
 
             while (*pos < toks->count && toks->items[*pos].kind == LITERAL) {
                 var *v = (var*)malloc(sizeof(var));
 
-                assert_kind(toks->items[*pos], LITERAL);
-                v->ident = toks->items[(*pos)++];
-                assert_kind(toks->items[(*pos)++], EQ);
-                v->ex = parse_expr(toks, pos, 0);
+                consume_and_assert(toks, LITERAL, pos);
+                consume_and_assert(toks, EQ, pos);
 
+                v->ident = toks->items[*pos - 2];
+                v->ex = parse_expr(toks, pos, 0);
                 nob_da_append(ex->expres, ((expr){ .kind = VAR, .v_expr = v }));
 
                 if (toks->items[*pos].kind != COMMA) break;
                 *pos += 1;
             }
 
-            assert_kind(toks->items[(*pos)++], RBRACE);
+            consume_and_assert(toks, RBRACE, pos);
             return ex;
         case LBRACE:
             printf("TODO: block expression\n");
@@ -356,11 +399,11 @@ expr* parse_expr(const tokens *toks, size_t *pos, char prec) {
     expr *ex = parse_leading_expr(toks, pos);
 
     while (toks->items[*pos].kind != M_EOF) {
-        if (is_bin_op(toks, pos) && get_bin_prec(toks->items[*pos]) >= prec) {
+        if (is_bin_op(toks, pos) && get_bin_prec(&toks->items[*pos]) >= prec) {
             bin *b = (bin*)calloc(1, sizeof(bin));
             b->lhs = ex;
             b->op = toks->items[*pos].kind;
-            b->rhs = parse_expr(toks, pos, get_bin_prec(toks->items[(*pos)++]));
+            b->rhs = parse_expr(toks, pos, get_bin_prec(&toks->items[(*pos)++]));
 
             expr *e = (expr*)calloc(1, sizeof(expr));
             e->kind = BIN;
@@ -375,23 +418,23 @@ expr* parse_expr(const tokens *toks, size_t *pos, char prec) {
     return ex;
 }
 
-bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos) {
+bool parse_stmt(const tokens *toks, stmts *nodes, size_t *pos) {
     const token *vals = toks->items;
 
     switch (vals[*pos].kind) {
+        case KW_SELF: [[fallthrough]];
         case LITERAL: 
-            return parse_literal(source, toks, nodes, pos);
+            return parse_literal(toks, nodes, pos);
         case KW_RETURN:
             *pos += 1;
             nob_da_append(nodes, ((stmt){ .kind = RETURN, .e = parse_expr(toks, pos, 0)}));
-            assert_kind(toks->items[(*pos)++], SEMI_COLON);
+
+            consume_and_assert(toks, SEMI_COLON, pos);
             return true;
         default:
             printf("\e[1;31mparser error:\e[0m unable to parse token `");
-            for (int src = vals[*pos].start; src < vals[*pos].end; src++) {
-                printf("%c", source[src]);
-            }
-            printf("`\n");
+            print_token(&vals[*pos]);
+            printf("` on line = %d\n", vals[*pos].line);
             return false;
     }
 
@@ -399,11 +442,11 @@ bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *po
     return true;
 }
 
-bool parse(const char *source, const tokens *toks, stmts *nodes) {
+bool parse(const tokens *toks, stmts *nodes) {
     size_t pos = 0;
 
     while (pos < toks->count)
-        if (!parse_stmt(source, toks, nodes, &pos)) 
+        if (!parse_stmt(toks, nodes, &pos)) 
             return false;
 
     printf("%zu\n", pos);

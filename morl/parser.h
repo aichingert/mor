@@ -4,6 +4,49 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+extern char *SRC;
+
+#define FOREACH_TOKEN(M_TOKEN) \
+    M_TOKEN(LITERAL)    \
+    M_TOKEN(NUMERAL)    \
+    M_TOKEN(LPAREN)     \
+    M_TOKEN(RPAREN)     \
+    M_TOKEN(LBRACE)     \
+    M_TOKEN(RBRACE)     \
+    M_TOKEN(LBRACKET)   \
+    M_TOKEN(RBRACKET)   \
+    M_TOKEN(COLON)      \
+    M_TOKEN(DB_COLON)   \
+    M_TOKEN(COLON_EQ)   \
+    M_TOKEN(SEMI_COLON) \
+    M_TOKEN(COMMA)      \
+    M_TOKEN(ARROW)      \
+    M_TOKEN(DOT)        \
+    M_TOKEN(STAR)       \
+    M_TOKEN(PLUS)       \
+    M_TOKEN(MINUS)      \
+    M_TOKEN(SLASH)      \
+    M_TOKEN(EQ)         \
+    M_TOKEN(MINUS_EQ)   \
+    M_TOKEN(PLUS_EQ)    \
+    M_TOKEN(KW_SELF)    \
+    M_TOKEN(KW_STRUCT)  \
+    M_TOKEN(KW_RETURN)  \
+    M_TOKEN(M_EOF)      \
+    M_TOKEN(M_UNKNOWN)  \
+
+#define GENERATE_ENUM(ENUM) ENUM,
+#define GENERATE_STRING(STRING) #STRING,
+
+typedef enum token_tag {
+    FOREACH_TOKEN(GENERATE_ENUM)
+} token_tag;
+
+[[maybe_unused]] static const char *TOKEN_TAG[] = {
+    FOREACH_TOKEN(GENERATE_STRING)
+};
+
+/*
 typedef enum {
     LITERAL, NUMERAL,
 
@@ -23,6 +66,7 @@ typedef enum {
 
     M_EOF, M_UNKNOWN_SYMBOL,
 } token_tag;
+*/
 
 typedef enum {
     // primitives 
@@ -128,10 +172,10 @@ typedef struct stmt {
     };
 } stmt;
 
-bool tokenize(const char *source, tokens *toks);
+bool tokenize(tokens *toks);
 
-bool parse(const char *source, const tokens *toks, stmts *nodes);
-bool parse_stmt(const char *source, const tokens *toks, stmts *nodes, size_t *pos);
+bool parse(const tokens *toks, stmts *nodes);
+bool parse_stmt(const tokens *toks, stmts *nodes, size_t *pos);
 expr* parse_expr(const tokens *toks, size_t *pos, char prec);
 
 #endif /* PARSER_H */

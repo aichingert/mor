@@ -6,21 +6,23 @@
 #include "nob.h"
 #include "parser.h"
 
-char* read_file(char *file_name) {
+char *SRC = NULL;
+
+bool read_file(char *file_name) {
     FILE *file = fopen(file_name, "rb");
+    if (file == NULL) return false;
 
-    if (file == NULL) return NULL;
-    if (fseek(file, 0, SEEK_END) != 0) return NULL;
+    if (fseek(file, 0, SEEK_END) != 0) return false;
     long file_size = ftell(file);
-    if (fseek(file, 0, SEEK_SET) != 0) return NULL;
+    if (fseek(file, 0, SEEK_SET) != 0) return false;
 
-    char *out_src = malloc(file_size + 1);
+    SRC = malloc(file_size + 1);
 
-    fread(out_src, file_size, 1, file);
-    out_src[file_size] = 0;
+    fread(SRC, file_size, 1, file);
+    SRC[file_size] = 0;
     fclose(file);
 
-    return out_src;
+    return true;
 }
 
 int main(int argc, char **argv) {
@@ -30,23 +32,21 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 1; i < argc; i++) {
-        char *src = read_file(argv[i]);
-
-        if (src == NULL) {
+        if (!read_file(argv[i])) {
             printf("morl: \e[1;31mfatal error:\e[0m failed to read %s\n", argv[i]);
             return 1;
         }
 
-        printf("[INFO] compiling: %s\n", src);
+        printf("[INFO] compiling: %s\n", SRC);
 
         tokens toks = {0};
-        if (!tokenize(src, &toks)) {
+        if (!tokenize(&toks)) {
             printf("morl: \e[1;31mfatal error:\e[0m failed to tokenize %s\n", argv[i]);
             return 1;
         }
 
         stmts nodes = {0};
-        if (!parse(src, &toks, &nodes)) {
+        if (!parse(&toks, &nodes)) {
             printf("morl: \e[1;31mfatal error:\e[0m failed to parse %s\n", argv[i]);
             return 1;
         }
