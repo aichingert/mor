@@ -314,9 +314,6 @@ bool parse_literal(const tokens *toks, stmts *nodes, size_t *pos) {
 
             return true;
         case DB_COLON:
-            if (vals[*pos].kind != KW_STRUCT && vals[*pos].kind != LPAREN) 
-                return false;
-
             if (vals[*pos].kind == KW_STRUCT) {
                 m_struct *ms = (m_struct*)calloc(1, sizeof(m_struct));
                 ms->ident = vals[(*pos)++ - 2];
@@ -334,14 +331,15 @@ bool parse_literal(const tokens *toks, stmts *nodes, size_t *pos) {
 
                     if (!parse_stmt(toks, &ms->fields, pos)) return false;
                 }
-            } else {
+                return true;
+            } else if (vals[*pos].kind == LPAREN) {
                 m_func *fn = (m_func*)calloc(1, sizeof(m_func));
                 fn->ident = vals[*pos - 2];
                 nob_da_append(nodes, ((stmt){ .kind = FUNCTION, .f = fn}));
                 return parse_func(toks, fn, pos);
             }
 
-            return true;
+            return false;
         case DOT:
             consume_and_assert(toks, LITERAL, pos);
 
