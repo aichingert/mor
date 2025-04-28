@@ -16,6 +16,7 @@ int main(int argc, char **argv) {
 
     nob_cc_flags(&cmd);
     nob_cc_inputs(&cmd, SRC_FOLDER"parser.c");
+    nob_cc_inputs(&cmd, SRC_FOLDER"types.h");
     nob_cc_inputs(&cmd, SRC_FOLDER"types.c");
 
     if (!nob_cmd_run_sync(cmd)) return 1;
