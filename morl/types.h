@@ -14,7 +14,7 @@ typedef struct c_tuple {
 } c_tuple;
 
 typedef struct node {
-    char *ident;
+    token *ident;
     c_type kind;
     bool taken;
 
@@ -31,6 +31,9 @@ typedef struct type_env {
     size_t len_taken;
 } type_env;
 
+type_env *type_init(void);
+void type_expand(type_env *env);
+void type_insert(type_env *env, node n);
 bool type_check();
 
 #endif /* TYPES_H */
