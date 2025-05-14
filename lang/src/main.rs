@@ -1,13 +1,6 @@
-use std::{
-    fs,
-    env::args,
-};
+use std::{env::args, fs};
 
-
-use lang::{
-    m_error,
-    parse::lexer,
-};
+use lang::{m_error, parse::lexer};
 
 fn main() {
     let args = args().skip(1);

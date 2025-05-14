@@ -20,7 +20,7 @@ ret_code :: () -> i32 {
 }
 
 main :: () -> i32 {
-    p : coord = coord.create();
+    p : coord = coord::create();
     o : coord = p.get_with_offset(30);
 
     p.jump();
