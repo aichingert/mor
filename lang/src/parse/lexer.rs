@@ -40,7 +40,7 @@ fn consume_if(
 ) -> Token {
     *pos += 1;
 
-    for (i, &(byte, kind)) in next.iter().enumerate() {
+    for &(byte, kind) in next.iter() {
         if *pos < bytes.len() && byte == bytes[*pos] {
             *pos += 1;
             return Token {
@@ -77,6 +77,14 @@ pub fn process(source: &str) -> Vec<Token> {
                 |c| c.is_ascii_alphanumeric() || c == b'_',
                 Literal,
             ),
+            b'.' => consume_single(&mut pos, line, Dot),
+            b',' => consume_single(&mut pos, line, Comma),
+            b';' => consume_single(&mut pos, line, SemiColon),
+            b'=' => consume_single(&mut pos, line, Eq), 
+            b'{' => consume_single(&mut pos, line, LBrace),
+            b'}' => consume_single(&mut pos, line, RBrace),
+            b'(' => consume_single(&mut pos, line, LParen),
+            b')' => consume_single(&mut pos, line, RParen),
             b':' => consume_if(
                 &mut pos,
                 line,
@@ -84,18 +92,10 @@ pub fn process(source: &str) -> Vec<Token> {
                 &[(b':', DbColon), (b'=', ColonEq)],
                 Colon,
             ),
-            b'.' => consume_single(&mut pos, line, Dot),
-            b',' => consume_single(&mut pos, line, Comma),
-            b';' => consume_single(&mut pos, line, SemiColon),
-            b'=' => consume_single(&mut pos, line, Eq),
             b'+' => consume_if(&mut pos, line, bytes, &[(b'=', PlusEq)], Plus),
             b'-' => consume_if(&mut pos, line, bytes, &[(b'>', Arrow)], Minus),
             b'*' => consume_if(&mut pos, line, bytes, &[], Star),
             b'/' => consume_if(&mut pos, line, bytes, &[], Slash),
-            b'{' => consume_single(&mut pos, line, LBrace),
-            b'}' => consume_single(&mut pos, line, RBrace),
-            b'(' => consume_single(&mut pos, line, LParen),
-            b')' => consume_single(&mut pos, line, RParen),
             b' ' | b'\n' => {
                 if bytes[pos] == b'\n' {
                     line += 1;
@@ -104,24 +104,22 @@ pub fn process(source: &str) -> Vec<Token> {
                 continue;
             }
             _ => {
-                m_error!("mor: ", 
-                    r "fatal error: ", 
-                    "unknown symbol: '", 
-                    (bytes[pos] as char), 
-                    "' on line ", line);
+                let s = format!("unknown symbol: '{}' on line {}", bytes[pos] as char, line);
+                m_error!("mor: ", r "fatal error: ", s);
             }
         });
 
         let last = toks.len() - 1;
         if toks[last].kind == TokenKind::Literal {
             match &source[toks[last].begin..toks[last].end] {
-                "self" => toks[last].kind = TokenKind::KwSelf,
-                "return" => toks[last].kind = TokenKind::KwReturn,
-                "struct" => toks[last].kind = TokenKind::KwStruct,
+                "self" => toks[last].kind = KwSelf,
+                "return" => toks[last].kind = KwReturn,
+                "struct" => toks[last].kind = KwStruct,
                 _ => (),
             }
         }
     }
 
+    toks.push(Token { begin: pos, end: pos, line: line, kind: EOF });
     toks
 }
