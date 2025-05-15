@@ -1,6 +1,9 @@
 use std::{env::args, fs};
 
-use lang::{m_error, parse::lexer};
+use lang::{
+    m_error,
+    parse::{lexer, parser, semantic},
+};
 
 fn main() {
     let args = args().skip(1);
@@ -13,7 +16,8 @@ fn main() {
             m_error!("mor: ", r "fatal error: ", "failed to read \"", arg, "\"");
         };
 
-        lexer::process(&source);
+        let toks = lexer::process(&source);
+        let stmts = parser::process(&source, &toks);
 
         println!("{source:?}");
     }

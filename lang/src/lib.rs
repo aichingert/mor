@@ -42,6 +42,28 @@ pub struct Token {
     kind: TokenKind,
 }
 
+pub enum Stmt {
+    Struct,
+    Declare,
+    Function,
+}
+
+pub enum Expr {
+    Bin,
+    Una,
+    Call,
+    Assign,
+    Declare,
+    Numeral,
+    Literal,
+}
+
+pub enum TypeExpr {
+    Infer,
+    Array,
+    Ident(Token),
+}
+
 #[macro_export]
 macro_rules! m_error {
     ($s:expr)   => {
@@ -65,3 +87,4 @@ macro_rules! m_error {
         print!("{}", format!("\x1b[31m{}\x1b[0m", $s)); m_error!(r $($r),+);
     };
 }
+

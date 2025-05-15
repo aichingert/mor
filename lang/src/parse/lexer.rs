@@ -80,7 +80,7 @@ pub fn process(source: &str) -> Vec<Token> {
             b'.' => consume_single(&mut pos, line, Dot),
             b',' => consume_single(&mut pos, line, Comma),
             b';' => consume_single(&mut pos, line, SemiColon),
-            b'=' => consume_single(&mut pos, line, Eq), 
+            b'=' => consume_single(&mut pos, line, Eq),
             b'{' => consume_single(&mut pos, line, LBrace),
             b'}' => consume_single(&mut pos, line, RBrace),
             b'(' => consume_single(&mut pos, line, LParen),
@@ -120,6 +120,11 @@ pub fn process(source: &str) -> Vec<Token> {
         }
     }
 
-    toks.push(Token { begin: pos, end: pos, line: line, kind: EOF });
+    toks.push(Token {
+        begin: pos,
+        end: pos,
+        line: line,
+        kind: EOF,
+    });
     toks
 }
