@@ -9,10 +9,10 @@ coord :: struct {
     jump :: (*self) {
         self.y += 30;
     }
-}
 
-coord.get_with_offset :: (*self, offset: i32) -> self {
-    return .{ x = self.x + offset, y = self.y + offset };
+    get_with_offset :: (*self, offset: i32) -> self {
+        return .{ x = self.x + offset, y = self.y + offset };
+    }
 }
 
 ret_code :: () -> i32 {

@@ -42,12 +42,19 @@ pub struct Token {
     kind: TokenKind,
 }
 
-pub enum Stmt {
-    Struct,
+#[derive(Debug, PartialEq, Eq)]
+pub struct MStruct<'a> {
+    ident: &'a Token,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Stmt<'a> {
+    Struct(MStruct<'a>),
     Declare,
     Function,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Bin,
     Una,
@@ -58,6 +65,7 @@ pub enum Expr {
     Literal,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum TypeExpr {
     Infer,
     Array,
@@ -87,4 +95,3 @@ macro_rules! m_error {
         print!("{}", format!("\x1b[31m{}\x1b[0m", $s)); m_error!(r $($r),+);
     };
 }
-
