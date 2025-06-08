@@ -1,6 +1,7 @@
 .{
-    .name = "lang",
+    .name = .lang,
     .version = "0.0.0",
+    .fingerprint = 0x31098462ade49543,
 
     .dependencies = .{},
 

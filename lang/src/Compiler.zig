@@ -17,8 +17,8 @@ pub fn compile(path: []const u8, allocator: std.mem.Allocator) !void {
     var ast = try Ast.init(allocator, source);
     defer ast.deinit(allocator);
 
-    var tct = try Tct.init(allocator, ast);
-    defer tct.deinit();
+    //var tct = try Tct.init(allocator, ast);
+    //defer tct.deinit();
 
     var mir = Mir.init(allocator, ast);
     try mir.genInstructions();

@@ -51,17 +51,20 @@ const ElfHeader = struct {
     }
 
     fn writeToBin(
-        self: ElfHeader,
-        writer: anytype, // TODO: get better at zig...
+        self: *ElfHeader,
+        writer: anytype,
     ) !void {
-        _ = try writer.write(&self.magic);
+        for (0..self.magic.len) |i| {
+            try writer.writeBits(self.magic[i], 8);
+        }
         try writer.writeBits(self.class, 8);
         try writer.writeBits(self.endianness, 8);
         try writer.writeBits(self.version, 8);
         try writer.writeBits(self.abi, 8);
         try writer.writeBits(self.abi_version, 8);
-        _ = try writer.write(&self.padding);
-
+        for (0..self.padding.len) |i| {
+            try writer.writeBits(self.padding[i], 8);
+        }
         try writer.writeBits(self.e_type, 16);
         try writer.writeBits(self.e_machine, 16);
         try writer.writeBits(self.e_version, 32);

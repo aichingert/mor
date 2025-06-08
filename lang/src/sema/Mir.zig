@@ -938,7 +938,7 @@ fn genFromMacroCall(self: *Self, macro_call: *Ast.Call, ctx: *Context) !void {
         const loc = self.ast.tokens.items(.loc)[self.ast.nodes.items(.main)[arg]];
         const val = self.ast.source[loc.start..loc.end];
 
-        var it = std.mem.split(u8, val, " ");
+        var it = std.mem.splitSequence(u8, val, " ");
         const op = it.next().?;
 
         var instr: Instr = .{ .tag = .mov };

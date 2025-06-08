@@ -4,8 +4,8 @@ const Elf = @import("../Elf.zig");
 const Mir = @import("../sema/Mir.zig");
 
 // ModR/M:
-// Bit 	  76   |   543 	|  210
-// Usage "Mod" |  "Reg" | "R/M"
+// Bit    76   |    543  |  210
+// Usage "Mod" |   "Reg" | "R/M"
 
 const sp: u8 = 0b100;
 const bp: u8 = 0b101;
@@ -332,7 +332,7 @@ fn add(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
             try buffer.append(0b11000000 | (rhs.register << 3) | lhs.register);
         },
         .immediate => {
-            const rbx = .{ .register = 3 };
+            const rbx: Mir.Operand = .{ .register = 3 };
             try mov(rbx, rhs, buffer);
             try add(lhs, rbx, buffer);
         },
@@ -349,7 +349,7 @@ fn sub(lhs: Mir.Operand, rhs: Mir.Operand, buffer: *std.ArrayList(u8)) !void {
             try buffer.append(0b11000000 | (lhs.register << 3) | rhs.register);
         },
         .immediate => {
-            const rbx = .{ .register = 3 };
+            const rbx: Mir.Operand = .{ .register = 3 };
 
             try mov(rbx, rhs, buffer);
 

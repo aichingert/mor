@@ -58,7 +58,7 @@ main :: fn() {
 
     ten := 10
     five := 5
-    res := 2 * ten - 7 * 3
+    res := 3 * ten - 7 * 3
 
     print_num(res)
 }
