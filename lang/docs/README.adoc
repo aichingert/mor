@@ -1,0 +1,101 @@
+= morl
+aichingert
+:icons: font 
+:toc:
+:toclevels: 3
+:experimental:
+
+the mor programming language (zero dependencies since you cannot trust other code)
+
+== syntax
+
+.example: printing a number
+[source, odin]
+----
+print_u8 :: fn(n: i32) {
+    $asm(
+        "mov rax, 1",
+        "lea rsi, n",
+        "mov rdi, 1",
+        "mov rdx, 8",
+        "syscall"
+    )
+}
+
+print_num :: fn(num: i64) {
+    n := num
+
+    if n < 0 {
+        print_u8(45)
+        n = -n
+    }
+
+    out := [0,0,0,0,0,0,0,0,0,0]
+    len := 0
+
+    while n != 0 {
+        $asm("mov rdx, 0")
+        div := n / 10
+
+        rem := 0
+        $asm("mov rem, rdx")
+
+        out[len] = rem + 48
+        n = div
+        len = len + 1
+    }
+
+    i := 0
+    while i < len {
+        print_u8(out[len - i - 1])
+        i = i + 1
+    }
+
+    print_u8(10)
+}
+
+print_arr :: fn(arr: u8, len: u8) {
+    i := 0
+
+    while i < len {
+        print_u8(arr[i])
+        i = i + 1
+    }
+
+    print_u8(10)
+}
+
+main :: fn() {
+    n := 65
+
+    print_arr([45, 48,49,50,51], 4)
+
+    ten := 10
+    five := 5
+    res := 2 * ten - 7 * 3
+
+    print_num(res)
+}
+----
+
+== features
+
+* reasonable fast (in the future there should be a split between the compiler frontend and backend) 
+* freedom to do pretty much anything you want, if you know how to
+** achieved through the *$asm* compiler-macro which enables you to
+*** make syscalls yourself
+*** access registers and store values in them as well as get values from them (the compiler might modify them, so do not store values long term in them)
+
+== TODO
+
+* indexing (ranges maybe)
+* some kind of iterators
+* anonymous structs (still thinking about it)
+* lots of syntax sugar ;) since I do not want to type a lot to do something
+
+== resources
+
+* https://refspecs.linuxfoundation.org/elf/elf.pdf[Elf specification^]
+* https://build-your-own.org/blog/20230219_elf_craft/[Information about building an Elf generator^]
+* https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html[x86-64 Instruction set^]
+* https://defuse.ca/online-x86-assembler.htm#disassembly2[Online disassembler^]
