@@ -8,7 +8,7 @@ const std = @import("std");
 
 const Ast = @import("Ast.zig");
 const Asm = @import("../coge/linux_x86_64.zig");
-const lex = @import("lexer.zig");
+const Lexer = @import("Lexer.zig");
 
 const Self = @This();
 
@@ -172,14 +172,14 @@ pub const Instr = struct {
         call,
         syscall,
 
-        fn unaryFrom(token: lex.Token.Tag) Tag {
+        fn unaryFrom(token: Lexer.Token.Tag) Tag {
             switch (token) {
                 .minus => return .neg,
                 else => std.debug.panic("Unknown unary expr kind: {any}\n", .{token}),
             }
         }
 
-        fn binaryFrom(token: lex.Token.Tag) Tag {
+        fn binaryFrom(token: Lexer.Token.Tag) Tag {
             return switch (token) {
                 .xor => .xor,
                 .plus => .add,

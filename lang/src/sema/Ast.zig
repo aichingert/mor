@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const lex = @import("lexer.zig");
-const Lexer = lex.Lexer;
-const Token = lex.Token;
+const Lexer = @import("Lexer.zig");
+const Token = Lexer.Token;
 const Parser = @import("Parser.zig");
 
 const Self = @This();
