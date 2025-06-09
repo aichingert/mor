@@ -1,69 +1,53 @@
 const std = @import("std");
+const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
 
 const Lexer = @import("Lexer.zig");
 const Token = Lexer.Token;
-const Parser = @import("Parser.zig");
+// const Parser = @import("Parser.zig");
 
 const Self = @This();
 
-nodes: NodeList.Slice,
-funcs: FuncList.Slice,
-calls: std.ArrayList(Call),
-conds: std.ArrayList(Cond),
-loops: std.ArrayList(Loop),
-stmts: std.ArrayList(usize),
-arras: std.ArrayList(Array),
-func_res: std.StringHashMap(usize),
+stmts: ArrayList(Stmt),
+vars: ArrayList(Var),
+funcs: ArrayList(Func),
 
-source: []const u8,
-tokens: TokenList.Slice,
-
-pub const NodeList = std.MultiArrayList(Node);
-pub const FuncList = std.MultiArrayList(Func);
-pub const TokenList = std.MultiArrayList(Token);
-
-pub const Node = struct {
+pub const Stmt = struct {
     tag: Tag,
-    main: usize,
-    data: Data,
-
-    const Data = struct {
-        lhs: usize,
-        rhs: usize,
-    };
+    idx: usize,
 
     const Tag = enum {
-        ident,
-
-        num_expr,
-        str_expr,
-        bol_expr,
-        vod_expr,
-
-        paren_expr,
-        unary_expr,
-        binary_expr,
-
-        if_expr,
-        while_expr,
-        call_expr,
-        macro_call_expr,
-        index_expr,
-
-        assign_stmt,
-        return_stmt,
-
-        type_declare,
-        array_declare,
-        mutable_declare,
-        constant_declare,
-        function_declare,
+        s_variable,
+        s_function,
     };
 };
 
+pub const MorType = union(enum) {
+    m_infer,
+    m_basic: MorPrimitive,
+    m_array: *Stmt,
+    m_struct: *Token,
+};
+
+pub const MorPrimitive = enum {
+    m_s8,
+    m_u8,
+    m_s16,
+    m_u16,
+    m_s32,
+    m_u32,
+    m_s64,
+    m_u64,
+};
+
+pub const Var = struct {
+    v_type: MorType,
+    v_ident: Token,
+};
+
 pub const Func = struct {
-    args: std.ArrayList(usize),
-    body: std.ArrayList(usize),
+    args: std.ArrayList(Stmt),
+    body: std.ArrayList(Stmt),
 
     return_type: Token.Tag,
 };
@@ -102,33 +86,18 @@ pub const Cond = struct {
     }
 };
 
-pub fn init(gpa: std.mem.Allocator, source: []const u8) std.mem.Allocator.Error!Self {
-    var tokens = Self.TokenList{};
-    defer tokens.deinit(gpa);
+pub fn init(gpa: Allocator, source: []const u8) Allocator.Error!Self {
+    const toks = try Lexer.parse(gpa, source);
+    defer toks.deinit();
 
-    var lexer = Lexer.init(source);
-
-    while (true) {
-        const token = lexer.genNext();
-        try tokens.append(gpa, token);
-        if (token.tag == .eof) break;
-    }
-
-    var parser = Parser.init(gpa, source, tokens.items(.tag), tokens.items(.loc));
-    defer parser.deinit();
-    try parser.parse();
+    //var parser = Parser.init(gpa, source, tokens.items(.tag), tokens.items(.loc));
+    //defer parser.deinit();
+    //try parser.parse();
 
     return .{
-        .source = source,
-        .tokens = tokens.toOwnedSlice(),
-        .stmts = parser.stmts,
-        .calls = parser.calls,
-        .conds = parser.conds,
-        .loops = parser.loops,
-        .arras = parser.arras,
-        .nodes = parser.nodes.toOwnedSlice(),
-        .funcs = parser.funcs.toOwnedSlice(),
-        .func_res = parser.func_res,
+        .stmts = ArrayList(Stmt).init(gpa),
+        .funcs = ArrayList(Func).init(gpa),
+        .vars = ArrayList(Var).init(gpa),
     };
 }
 
@@ -139,35 +108,6 @@ pub fn getIdent(self: *const Self, idx: usize) []const u8 {
 }
 
 pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
-    for (self.calls.items) |call| {
-        call.args.deinit();
-    }
-
-    for (self.arras.items) |array| {
-        array.deinit();
-    }
-
-    for (self.conds.items) |cond| {
-        cond.deinit();
-    }
-
-    for (self.loops.items) |loop| {
-        loop.deinit();
-    }
-
-    for (self.funcs.items(.args), 0..) |_, i| {
-        self.funcs.items(.args)[i].deinit();
-        self.funcs.items(.body)[i].deinit();
-    }
-
-    self.calls.deinit();
-    self.conds.deinit();
-    self.loops.deinit();
-    self.stmts.deinit();
-    self.arras.deinit();
-    self.nodes.deinit(gpa);
-    self.funcs.deinit(gpa);
-    self.tokens.deinit(gpa);
-    self.func_res.deinit();
-    self.* = undefined;
+    _ = self;
+    _ = gpa;
 }

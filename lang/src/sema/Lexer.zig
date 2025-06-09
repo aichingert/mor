@@ -1,4 +1,6 @@
 const std = @import("std");
+const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
 
 source: []const u8,
 index: usize,
@@ -10,6 +12,19 @@ pub fn init(source: []const u8) Self {
         .source = source,
         .index = 0,
     };
+}
+
+pub fn parse(gpa: Allocator, source: []const u8) !ArrayList(Token) {
+    var this = init(source);
+    var tokens = ArrayList(Token).init(gpa);
+
+    while (true) {
+        const token = this.genNext();
+        try tokens.append(token);
+        if (token.tag == .eof) break;
+    }
+
+    return tokens;
 }
 
 // zig fmt: off

@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const Ast = @import("sema/Ast.zig");
-const Tct = @import("sema/Tct.zig");
-const Mir = @import("sema/Mir.zig");
+//const Tct = @import("sema/Tct.zig");
+//const Mir = @import("sema/Mir.zig");
 const Elf = @import("Elf.zig");
 
 pub fn compile(path: []const u8, allocator: std.mem.Allocator) !void {
@@ -18,11 +18,11 @@ pub fn compile(path: []const u8, allocator: std.mem.Allocator) !void {
     //var tct = try Tct.init(allocator, ast);
     //defer tct.deinit();
 
-    var mir = Mir.init(allocator, ast);
-    try mir.genInstructions();
-    defer mir.instructions.deinit();
+    //var mir = Mir.init(allocator, ast);
+    //try mir.genInstructions();
+    //defer mir.instructions.deinit();
 
-    try Elf.genExe(allocator, mir);
+    //try Elf.genExe(allocator, mir);
 }
 
 pub fn main() !void {
