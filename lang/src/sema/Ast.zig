@@ -4,7 +4,8 @@ const Allocator = std.mem.Allocator;
 
 const Lexer = @import("Lexer.zig");
 const Token = Lexer.Token;
-// const Parser = @import("Parser.zig");
+
+const Parser = @import("Parser.zig");
 
 const Self = @This();
 
@@ -86,19 +87,11 @@ pub const Cond = struct {
     }
 };
 
-pub fn init(gpa: Allocator, source: []const u8) Allocator.Error!Self {
-    const toks = try Lexer.parse(gpa, source);
+pub fn from_source(gpa: Allocator, source: []const u8) Parser.ParseError!Self {
+    const toks = Lexer.parse(gpa, source) catch return Parser.ParseError.AllocatorError;
     defer toks.deinit();
 
-    //var parser = Parser.init(gpa, source, tokens.items(.tag), tokens.items(.loc));
-    //defer parser.deinit();
-    //try parser.parse();
-
-    return .{
-        .stmts = ArrayList(Stmt).init(gpa),
-        .funcs = ArrayList(Func).init(gpa),
-        .vars = ArrayList(Var).init(gpa),
-    };
+    return Parser.from_tokens(gpa, &toks);
 }
 
 pub fn getIdent(self: *const Self, idx: usize) []const u8 {

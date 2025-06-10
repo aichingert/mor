@@ -1,0 +1,11 @@
+*
+
+!*.zig
+!*.zig.zon
+!*.adoc
+!*.mo
+!*.sh
+!**/src
+!**/sema
+!**/coge
+!.gitignore
