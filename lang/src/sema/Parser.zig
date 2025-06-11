@@ -7,13 +7,15 @@ const Token = @import("Lexer.zig").Token;
 
 const Self = @This();
 
+ast: Ast,
 pos: usize,
 gpa: Allocator,
 toks: *const ArrayList(Token),
 
 pub const ParseError = error {
     InvalidToken,
-    AllocatorError,
+    IndexOutOfBounds,
+    Allocator,
 };
 
 fn assert_inc(self: *Self, kind: Token.Tag) ParseError!void {
@@ -27,29 +29,36 @@ fn assert_inc(self: *Self, kind: Token.Tag) ParseError!void {
 
 fn token(self: *Self) ParseError!Token {
     if (self.pos >= self.toks.items.len) {
-        return ParseError.InvalidToken;
+        return ParseError.IndexOutOfBounds;
     }
 
     return self.toks.items[self.pos];
 }
 
-pub fn from_tokens(gpa: Allocator, toks: *const ArrayList(Token)) ParseError!Ast {
-    const ast = Ast {
-        .stmts = ArrayList(Ast.Stmt).init(gpa),
-        .funcs = ArrayList(Ast.Func).init(gpa),
-        .vars = ArrayList(Ast.Var).init(gpa),
-    };
+fn token_at(self: *Self, at: usize) ParseError!Token {
+    if (at >= self.toks.items.len) {
+        return ParseError.IndexOutOfBounds;
+    }
 
+    return self.toks.items[at];
+}
+
+pub fn from_tokens(gpa: Allocator, toks: *const ArrayList(Token)) ParseError!Ast {
     var parser: Self = .{
         .pos = 0,
         .gpa = gpa,
         .toks = toks,
+        .ast = .{
+            .stmts = ArrayList(Ast.Stmt).init(gpa),
+            .funcs = ArrayList(Ast.Func).init(gpa),
+            .vars = ArrayList(Ast.Var).init(gpa),
+        },
     };
 
     while (true) {
         var tag = (try parser.token()).tag;
         if (tag == .eof) {
-            return ast;
+            return parser.ast;
         }
 
         const id = parser.pos;
@@ -69,14 +78,60 @@ pub fn from_tokens(gpa: Allocator, toks: *const ArrayList(Token)) ParseError!Ast
     }
 }
 
-fn consume_func(self: *Self, ident: usize) ParseError!Ast.Func {
+fn consume_type(self: *Self) ParseError!Ast.MorType {
+    // TODO:
+    _ = self;
+    std.debug.assert(true == false);
+    return ParseError.InvalidToken;
+}
+
+fn consume_block(self: *Self) ParseError!ArrayList(Ast.Stmt) {
+    try self.assert_inc(.lbrace);
+
+    std.debug.print("TODO: \n", .{});
+
+
+    try self.assert_inc(.rbrace);
+    return ParseError.Allocator;
+}
+
+fn consume_func(self: *Self, f_ident: usize) ParseError!Ast.Func {
+    var func: Ast.Func = .{
+        .args = ArrayList(Ast.Var).init(self.gpa),
+        .body = ArrayList(Ast.Stmt).init(self.gpa),
+        .ident = try self.token_at(f_ident),
+        .return_type = .m_void,
+    };
     try self.assert_inc(.lparen);
 
     // consume arguments
+    while ((try self.token()).tag != .rparen) {
+        const arg_ident = self.pos;
 
+        try self.assert_inc(.identifier);
+        try self.assert_inc(.colon);
 
-    _ = ident;
-    return ParseError.InvalidToken;
+        const arg_type = try self.consume_type();
+
+        self.ast.vars.append(.{ 
+            .v_type = arg_type,
+            .v_ident = try self.token_at(arg_ident), 
+        }) catch { return ParseError.Allocator; };
+
+        if ((try self.token()).tag == .comma) {
+            try self.assert_inc(.comma);
+        }
+    }
+
+    try self.assert_inc(.rparen);
+
+    if ((try self.token()).tag != .lbrace) {
+        func.return_type = try self.consume_type();
+    }
+
+    // consume block
+    func.body = try self.consume_block();
+    return func; 
 }
 
 // gpa: std.mem.Allocator,

@@ -24,6 +24,7 @@ pub const Stmt = struct {
 };
 
 pub const MorType = union(enum) {
+    m_void,
     m_infer,
     m_basic: MorPrimitive,
     m_array: *Stmt,
@@ -41,20 +42,22 @@ pub const MorPrimitive = enum {
     m_u64,
 };
 
+
 pub const Var = struct {
     v_type: MorType,
     v_ident: Token,
 };
 
 pub const Func = struct {
-    args: std.ArrayList(Stmt),
-    body: std.ArrayList(Stmt),
+    args: ArrayList(Var),
+    body: ArrayList(Stmt), 
 
-    return_type: Token.Tag,
+    ident: Token,
+    return_type: MorType, 
 };
 
 pub const Call = struct {
-    args: std.ArrayList(usize),
+    args: ArrayList(usize),
 };
 
 pub const Loop = struct {
@@ -88,7 +91,7 @@ pub const Cond = struct {
 };
 
 pub fn from_source(gpa: Allocator, source: []const u8) Parser.ParseError!Self {
-    const toks = Lexer.parse(gpa, source) catch return Parser.ParseError.AllocatorError;
+    const toks = Lexer.parse(gpa, source) catch return Parser.ParseError.Allocator;
     defer toks.deinit();
 
     return Parser.from_tokens(gpa, &toks);
