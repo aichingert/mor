@@ -7,62 +7,76 @@ const Token = @import("Lexer.zig").Token;
 
 const Self = @This();
 
+pos: usize,
 gpa: Allocator,
-stmts: ArrayList(Ast.Stmt),
-funcs: ArrayList(Ast.Func),
-vars: ArrayList(Ast.Var),
+toks: *const ArrayList(Token),
 
 pub const ParseError = error {
     InvalidToken,
     AllocatorError,
 };
 
+fn assert_inc(self: *Self, kind: Token.Tag) ParseError!void {
+    defer self.pos += 1;
+    const tag = (try self.token()).tag;
+
+    if (tag != kind) {
+        return ParseError.InvalidToken;
+    }
+}
+
+fn token(self: *Self) ParseError!Token {
+    if (self.pos >= self.toks.items.len) {
+        return ParseError.InvalidToken;
+    }
+
+    return self.toks.items[self.pos];
+}
+
 pub fn from_tokens(gpa: Allocator, toks: *const ArrayList(Token)) ParseError!Ast {
-    var parser = Self{
-        .gpa = gpa,
+    const ast = Ast {
         .stmts = ArrayList(Ast.Stmt).init(gpa),
         .funcs = ArrayList(Ast.Func).init(gpa),
         .vars = ArrayList(Ast.Var).init(gpa),
     };
 
-    try parser.parse_tokens(toks);
-
-    return .{
-        .vars = parser.vars,
-        .stmts = parser.stmts,
-        .funcs = parser.funcs,
+    var parser: Self = .{
+        .pos = 0,
+        .gpa = gpa,
+        .toks = toks,
     };
-}
-
-fn advance_and_assert(pos: *usize, kind: Token.Tag, toks: *const ArrayList(Token)) void {
-    defer pos.* += 1;
-    std.debug.assert(toks.items[pos.*].tag == kind);
-}
-
-fn parse_tokens(self: *Self, toks: *const ArrayList(Token)) ParseError!void {
-    var pos: usize = 0;
 
     while (true) {
-        if (toks.items[pos].tag == .eof) {
-            return;
+        var tag = (try parser.token()).tag;
+        if (tag == .eof) {
+            return ast;
         }
 
-        if (toks.items[pos].tag != .identifier) {
-            return ParseError.InvalidToken;
-        }
+        const id = parser.pos;
+        try parser.assert_inc(.identifier);
+        try parser.assert_inc(.colon);
+        try parser.assert_inc(.colon);
 
-        std.debug.assert(pos + 4 < toks.items.len);
+        tag = (try parser.token()).tag;
 
-        // var ident = pos;
-        advance_and_assert(&pos, .colon, toks);
-        advance_and_assert(&pos, .colon, toks);
-        pos += 1;
-
-        _ = self;
-        switch (toks.items[pos].tag) {
-            else => {},
+        switch (tag) {
+            .lparen => {
+                const func = try parser.consume_func(id);
+                _ = func;
+            },
+            else => return ParseError.InvalidToken,
         }
     }
+}
+
+fn consume_func(self: *Self, ident: usize) ParseError!Ast.Func {
+    try self.assert_inc(.lparen);
+
+    // consume arguments
+
+
+    _ = ident;
+    return ParseError.InvalidToken;
 }
 
 // gpa: std.mem.Allocator,
